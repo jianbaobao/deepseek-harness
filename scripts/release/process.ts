@@ -7,6 +7,18 @@ import { spawnSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
+/**
+ * Node's spawnSync on Windows cannot launch .cmd/.bat shims directly (EINVAL),
+ * so bare command names are wrapped with `cmd.exe /d /s /c` like a shell would.
+ * Absolute or relative paths (containing a separator) pass through unchanged.
+ */
+function commandInvocation(command: string, args: readonly string[]): { command: string; args: string[] } {
+  if (process.platform === 'win32' && !command.includes('\\') && !command.includes('/')) {
+    return { command: 'cmd.exe', args: ['/d', '/s', '/c', command, ...args] }
+  }
+  return { command, args: [...args] }
+}
+
 /** Where and with what environment a release step runs a command. */
 export interface RunOptions {
   /** Working directory; defaults to the current one. */
@@ -33,7 +45,8 @@ export interface CommandResult {
  * @returns The exit status and captured streams.
  */
 export function attempt(command: string, args: readonly string[], options: RunOptions = {}): CommandResult {
-  const result = spawnSync(command, [...args], { cwd: options.cwd, env: options.env, encoding: 'utf8' })
+  const { command: cmdName, args: cmdArgs } = commandInvocation(command, args)
+  const result = spawnSync(cmdName, cmdArgs, { cwd: options.cwd, env: options.env, encoding: 'utf8' })
   if (result.error !== undefined) throw result.error
   return { status: result.status, stdout: result.stdout, stderr: result.stderr }
 }
@@ -61,7 +74,8 @@ export function capture(command: string, args: readonly string[], options: RunOp
  * @param options - working directory and environment.
  */
 export function run(command: string, args: readonly string[], options: RunOptions = {}): void {
-  const result = spawnSync(command, [...args], { cwd: options.cwd, env: options.env, stdio: 'inherit' })
+  const { command: cmdName, args: cmdArgs } = commandInvocation(command, args)
+  const result = spawnSync(cmdName, cmdArgs, { cwd: options.cwd, env: options.env, stdio: 'inherit' })
   if (result.error !== undefined) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} exited with ${String(result.status)}`)
 }

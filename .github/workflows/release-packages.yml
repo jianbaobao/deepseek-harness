@@ -1,0 +1,191 @@
+# Build DeepSeek Harness install artifacts and publish them as a GitHub
+# Release on this repository, modeled on the esengine/DeepSeek-Reasonix
+# release shape:
+#   - npm tarballs for every @deepseek-ai/* package (dsh + vendor families)
+#   - a Windows portable zip (self-contained node_modules, no symlinks)
+#
+# Trigger on a dsh-v* / v* tag push, or manually with workflow_dispatch.
+# Example: git tag dsh-v0.1.0-rc.5 && git push origin dsh-v0.1.0-rc.5
+name: Build & Release Installers
+
+on:
+  push:
+    tags: ['dsh-v*', 'v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-installers-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  pack-npm:
+    name: Pack npm tarballs
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack npm tarballs (dsh + vendor families)
+        run: bash scripts/pack-all-tgz.sh dist/tgz
+
+      - name: Resolve version
+        id: version
+        run: |
+          REF="${{ github.ref }}"
+          TAG="${REF#refs/tags/}"
+          if [[ "$TAG" != "$REF" ]]; then
+            VER="${TAG#dsh-v}"
+            VER="${VER#v}"
+          else
+            VER="$(node -p "require('./apps/cli/package.json').version")"
+            TAG="dsh-v${VER}"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarballs
+          path: dist/tgz/*.tgz
+          if-no-files-found: error
+
+  portable-windows:
+    name: Build Windows portable package
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack npm tarballs (dsh + vendor families)
+        run: bash scripts/pack-all-tgz.sh dist/tgz
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $ref = "$env:GITHUB_REF"
+          if ($ref -like 'refs/tags/*') {
+            $tag = $ref -replace '^refs/tags/', ''
+            $ver = $tag -replace '^dsh-v', '' -replace '^v', ''
+          } else {
+            $ver = (Get-Content apps/cli/package.json | ConvertFrom-Json).version
+            $tag = "dsh-v$ver"
+          }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Assemble portable directory
+        run: node scripts/package-portable.mjs . dist/portable
+
+      - name: Create Windows zip
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          Compress-Archive -Path dist/portable/* -DestinationPath "dsh-windows-x64-$ver.zip" -CompressionLevel Optimal
+          Get-Item "dsh-windows-x64-$ver.zip" | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: dsh-windows-x64-*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [pack-npm, portable-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Compute SHA256SUMS
+        working-directory: artifacts
+        run: |
+          find . -type f \( -name '*.tgz' -o -name '*.zip' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Write latest.json
+        run: |
+          cat > latest.json <<EOF
+          {
+            "version": "${{ needs.pack-npm.outputs.version }}",
+            "tag": "${{ needs.pack-npm.outputs.tag }}",
+            "assets": {
+              "windows": "dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip"
+            }
+          }
+          EOF
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.pack-npm.outputs.tag }}
+          name: DeepSeek Harness ${{ needs.pack-npm.outputs.version }}
+          body: |
+            ## DeepSeek Harness ${{ needs.pack-npm.outputs.version }}
+
+            Automated build of the DeepSeek Harness repository.
+
+            ### Windows portable package
+            - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (requires Node.js >= 22.19).
+
+            ### npm tarballs
+            All `@deepseek-ai/*` packages as npm tarballs — install globally with:
+            ```
+            npm i -g dsh-*.tgz
+            ```
+            or add the tarball of `@deepseek-ai/dsh` to your project dependencies.
+
+            ### Verify
+            SHA256SUMS lists every artifact's checksum.
+          files: |
+            latest.json
+            artifacts/**/*.tgz
+            artifacts/**/*.zip
+            artifacts/SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: false
