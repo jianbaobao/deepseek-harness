@@ -173,11 +173,31 @@ jobs:
           $ver = "${{ steps.version.outputs.version }}"
           Compress-Archive -Path dist/windows-bundle/* -DestinationPath "dsh-windows-x64-$ver.zip" -CompressionLevel Optimal
 
+      - name: Build Desktop app (Electron, Reasonix-style window)
+        shell: pwsh
+        run: |
+          # Bundle dsh (bundled Node + node_modules) as a tarball for the desktop app:
+          # electron-builder excludes node_modules from extraResources, so the
+          # app extracts the archive into userData on first launch.
+          New-Item -ItemType Directory -Force -Path desktop/resources | Out-Null
+          Remove-Item -Force desktop/resources/dsh-bundle.tar.gz -ErrorAction SilentlyContinue
+          & 'C:\Windows\System32\tar.exe' -czf desktop/resources/dsh-bundle.tar.gz -C dist/windows-bundle .
+          # Pin the desktop package version to the release version
+          $pkg = Get-Content desktop/package.json -Raw
+          $pkg = [regex]::Replace($pkg, '"version":\s*"[^"]*"', '"version": "${{ steps.version.outputs.version }}"')
+          Set-Content desktop/package.json $pkg
+          # Install Electron + builder and produce the desktop installers
+          npm install --prefix desktop --no-audit --no-fund
+          $env:ELECTRON_MIRROR = 'https://npmmirror.com/mirrors/electron/'
+          npm run dist --prefix desktop
+          Get-ChildItem dist/desktop/*.exe | Select-Object Name, Length
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: |
             dist/DeepSeek-Harness-*.exe
+            dist/desktop/*.exe
             dsh-windows-x64-*.zip
           if-no-files-found: error
 
@@ -338,6 +358,7 @@ jobs:
             "assets": {
               "windows": "dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip",
               "windows-installer": "DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-setup.exe",
+              "windows-desktop": "DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-desktop-setup.exe",
               "linux": "deepseek-harness_${{ needs.pack-npm.outputs.version }}_amd64.deb",
               "macos": "DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-macos.dmg"
             }
@@ -358,6 +379,9 @@ jobs:
             - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-setup.exe` — Windows installer (Inno Setup, per-user, adds dsh to PATH).
             - `deepseek-harness_${{ needs.pack-npm.outputs.version }}_amd64.deb` — Debian/Ubuntu package (`sudo dpkg -i`).
             - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-macos.dmg` — macOS disk image (run 安装.command to link dsh into ~/.local/bin).
+
+            ### Windows Desktop app (Electron window, Reasonix-style)
+            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-desktop-setup.exe` — desktop window app; bundles dsh + Node, opens the GUI in its own window (no browser).
 
             ### Windows portable zip (no installer)
             - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (bundled Node included).

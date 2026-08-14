@@ -1,0 +1,48 @@
+{
+  "name": "dsh-desktop",
+  "version": "0.1.0-rc.5",
+  "private": true,
+  "description": "DeepSeek Harness Desktop - Reasonix-style GUI over the dsh web profile",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "ai.deepseek-harness.desktop",
+    "productName": "DeepSeek Harness",
+    "directories": {
+      "output": "../dist/desktop"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/dsh-bundle.tar.gz",
+        "to": "dsh-bundle.tar.gz"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "DeepSeek-Harness-${version}-desktop-setup.exe"
+    },
+    "portable": {
+      "artifactName": "DeepSeek-Harness-${version}-desktop-portable.exe"
+    }
+  }
+}
