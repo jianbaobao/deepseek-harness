@@ -16,6 +16,18 @@ const fs = require('node:fs')
 const PORT = 3080
 const SMOKE = process.env.DSH_DESKTOP_SMOKE === '1'
 
+// Custom workspace: settings.json at userData root ({"workspace": "D:\\code\\demo"})
+// or the DSH_DESKTOP_WORKSPACE environment variable. Falls back to the bundle dir.
+function resolveWorkspace() {
+  const envWs = process.env.DSH_DESKTOP_WORKSPACE
+  if (envWs && fs.existsSync(envWs)) return envWs
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'settings.json'), 'utf8'))
+    if (typeof cfg.workspace === 'string' && fs.existsSync(cfg.workspace)) return cfg.workspace
+  } catch { /* no settings file yet */ }
+  return undefined
+}
+
 function resourcesDir() {
   if (process.env.DSH_DESKTOP_RESOURCES_DIR) return process.env.DSH_DESKTOP_RESOURCES_DIR
   return path.join(process.resourcesPath || path.join(__dirname, 'resources'))
@@ -53,9 +65,12 @@ function startDsh(dir) {
   const bin = path.join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const dshHome = path.join(app.getPath('userData'), 'dsh-home')
   fs.mkdirSync(dshHome, { recursive: true })
+  const workspace = resolveWorkspace()
   dshProcess = spawn(node, [bin, '--profile', 'web', '--port', String(PORT)], {
-    cwd: dir,
+    cwd: workspace || dir,
     stdio: 'inherit',
+    // windowsHide keeps the bundled node.exe console window from flashing on Windows
+    windowsHide: true,
     env: { ...process.env, DSH_HOME: dshHome },
   })
   dshProcess.on('exit', (code) => {
@@ -86,9 +101,17 @@ function waitForServer(timeoutMs) {
 }
 
 function killDsh() {
-  if (dshProcess && !dshProcess.killed) {
-    try { dshProcess.kill() } catch { /* ignore */ }
-  }
+  if (!dshProcess || dshProcess.killed) return
+  try {
+    if (process.platform === 'win32') {
+      // Kill the full tree so the web worker child does not outlive the window
+      execFileSync('taskkill', ['/PID', String(dshProcess.pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      try { process.kill(-dshProcess.pid, 'SIGTERM') } catch { /* group may not exist */ }
+      dshProcess.kill()
+    }
+  } catch { /* already gone */ }
+  dshProcess = null
 }
 
 app.whenReady().then(async () => {
