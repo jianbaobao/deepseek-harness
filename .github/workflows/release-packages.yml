@@ -155,8 +155,17 @@ jobs:
             "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw 'ISCC.exe not found after Inno Setup install' }
-          & $iscc /DMyAppVersion=${{ steps.version.outputs.version }} /DMyAppVersionInfo=$verInfo scripts/installer-windows.iss
-          Get-Item "dist/DeepSeek-Harness-${{ steps.version.outputs.version }}-setup.exe" | Select-Object Name, Length
+          & $iscc /DMyAppVersion=${{ steps.version.outputs.version }} /DMyAppVersionInfo=$verInfo scripts/installer-windows.iss 2>&1 | Tee-Object -FilePath iscc-errors.txt
+          exit $LASTEXITCODE
+      - name: Upload ISCC errors (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iscc-errors
+          path: iscc-errors.txt
+      - name: Verify installer artifact
+        if: success()
+        run: Get-Item "dist/DeepSeek-Harness-${{ steps.version.outputs.version }}-setup.exe" | Select-Object Name, Length
 
       - name: Create Windows portable zip
         shell: pwsh
