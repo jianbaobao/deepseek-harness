@@ -106,15 +106,21 @@ const bundledNode = nodeDir !== undefined && existsSync(nodeDir)
 writeFileSync(join(outDir, 'dsh.cmd'),
   `@echo off\r\n` +
   `setlocal\r\n` +
+  `rem With no arguments, boot the web profile so the app "just works"\r\n` +
+  `rem like a normal desktop program (Reasonix-style).\r\n` +
+  `set "DEFAULT_ARGS="\r\n` +
+  `if "%~1"=="" set "DEFAULT_ARGS=--profile web"\r\n` +
   `set "DSH_NODE=%~dp0node\\node.exe"\r\n` +
   `if exist "%DSH_NODE%" (\r\n` +
-  `  "%DSH_NODE%" "%~dp0${relEntryBin}" %*\r\n` +
+  `  "%DSH_NODE%" "%~dp0${relEntryBin}" %DEFAULT_ARGS% %*\r\n` +
   `) else (\r\n` +
-  `  node "%~dp0${relEntryBin}" %*\r\n` +
+  `  node "%~dp0${relEntryBin}" %DEFAULT_ARGS% %*\r\n` +
   `)\r\n`)
 writeFileSync(join(outDir, 'dsh'),
   `#!/usr/bin/env sh\n` +
   `DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n` +
+  `# With no arguments, boot the web profile so the app "just works".\n` +
+  `if [ "$#" -eq 0 ]; then set -- --profile web; fi\n` +
   `if [ -x "$DIR/node/bin/node" ]; then\n` +
   `  exec "$DIR/node/bin/node" "$DIR/${relEntryBin}" "$@"\n` +
   `fi\n` +
