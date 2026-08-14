@@ -48,7 +48,7 @@ Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
   ValueData: "{olddata};{app}"; Check: NeedsAddPath
 
 [Code]
-function NeedsAddPath(Param: string): Boolean;
+function NeedsAddPath(): Boolean;
 var
   OrigPath: string;
 begin
