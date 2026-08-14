@@ -62,11 +62,8 @@ jobs:
   # the separate DSH_CI_FAILOVER_WINDOWS variable on the windows-native job below.
   node-24:
     if: github.event_name == 'pull_request'
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
-          && github.event.pull_request.user.login != 'dependabot[bot]'
-          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+    # Fork-compatible: hosted runner (org-level runners are unavailable on forks).
+    runs-on: ubuntu-latest
     name: node 24 / static
     env:
       DSH_GATE_CONCURRENCY: '8'
@@ -96,7 +93,7 @@ jobs:
       # Pull requests consume the default-branch cache but do not put cache
       # compression and upload on the paid latency-critical path. Skipped
       # under failover — see the coverage lane's identical rationale.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -114,11 +111,8 @@ jobs:
 
   node-24-coverage:
     if: github.event_name == 'pull_request'
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
-          && github.event.pull_request.user.login != 'dependabot[bot]'
-          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+    # Fork-compatible: hosted runner (org-level runners are unavailable on forks).
+    runs-on: ubuntu-latest
     name: node 24 / coverage
     env:
       # The hosted 16-core runner uses six coverage workers. The failover pool
@@ -151,7 +145,7 @@ jobs:
       # Skipped under failover: the self-hosted VM's persistent pnpm store
       # already serves warm installs, while restoring the hosted archive
       # would spend ~52 s pulling ~180 MB into that populated store.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -177,11 +171,8 @@ jobs:
 
   node-24-consumers:
     if: github.event_name == 'pull_request'
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
-          && github.event.pull_request.user.login != 'dependabot[bot]'
-          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'dsh-ubuntu-24-04-16core' }}
+    # Fork-compatible: hosted runner (org-level runners are unavailable on forks).
+    runs-on: ubuntu-latest
     name: node 24 / snapshots and artifacts
     env:
       DSH_GATE_CONCURRENCY: '8'
@@ -212,7 +203,7 @@ jobs:
           echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
       # Skipped under failover — see the coverage lane's identical rationale.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
@@ -222,7 +213,7 @@ jobs:
 
       # Pull requests restore the cache normally produced by serial-linux on
       # master; they do not pay compression and upload on the required path.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
         with:
           path: ~/.cache/ms-playwright
@@ -361,7 +352,7 @@ jobs:
           store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
           echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -375,7 +366,7 @@ jobs:
         id: wine-cache-key
         run: echo "key=wine-debs-${ImageOS:-linux}-${ImageVersion:-v0}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/wine-debs
           key: ${{ steps.wine-cache-key.outputs.key }}
@@ -419,7 +410,7 @@ jobs:
         id: wine-cache-key
         run: echo "key=wine-debs-${ImageOS:-linux}-${ImageVersion:-v0}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: wine-cache
         with:
           path: ~/wine-debs
@@ -446,11 +437,8 @@ jobs:
   # and the all-checks-passed verdict above.
   windows-native:
     if: github.event_name == 'pull_request'
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted'
-          && github.event.pull_request.user.login != 'dependabot[bot]'
-          && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
-          || 'dsh-windows-2025-16core' }}
+    # Fork-compatible: hosted runner (org-level runners are unavailable on forks).
+    runs-on: windows-latest
     name: windows node 24 / native complete
     timeout-minutes: 60
     env:
@@ -523,7 +511,7 @@ jobs:
       # restore exactly this key and path, and setup-node's built-in cache
       # uses its own key format — converting this producer would silently
       # starve their documented restore-only optimization.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -531,7 +519,7 @@ jobs:
             ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
 
       # Master produces the hosted Chromium cache restored by pull requests.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
@@ -571,8 +559,9 @@ jobs:
   # pull requests; no cache steps because the VM's persistent pnpm store and
   # tool caches make them redundant (and saving here would poison the hosted
   # cache namespace with self-hosted paths).
+  # Fork-compatible: disabled on forks (no self-hosted runner); re-enable upstream by restoring the original if.
   serial-linux-selfhosted:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: false
     name: serial / linux (self-hosted standby)
     runs-on: [self-hosted, linux, x64, vm-backup]
     steps:
@@ -655,8 +644,9 @@ jobs:
   # owns the PR verdict. No cache steps because the VM's persistent pnpm store
   # and tool caches make them redundant (and saving here would poison the
   # hosted cache namespace with self-hosted paths).
+  # Fork-compatible: disabled on forks (no self-hosted runner); re-enable upstream by restoring the original if.
   serial-windows:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: false
     name: serial / windows (self-hosted standby)
     runs-on: [self-hosted, dsh-win-ci, windows]
     timeout-minutes: 60
@@ -697,8 +687,9 @@ jobs:
 
   # Manual, bounded comparison of the actual critical Linux and Windows lanes.
   # The named pools are restricted at the organization level to this repository.
+  # Fork-compatible: disabled on forks (runner matrix uses org-level runners).
   larger-runner-benchmark:
-    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'larger-runner-benchmark'
+    if: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     strategy:
@@ -788,8 +779,9 @@ jobs:
   # Manual comparison of the intended low-fanout topology. Linux runs the
   # complete unsharded primary aggregate with bounded in-runner parallelism;
   # Windows runs both blocking build targets concurrently through run-gates.
+  # Fork-compatible: disabled on forks (runner matrix uses org-level runners).
   consolidated-runner-benchmark:
-    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'consolidated-runner-benchmark'
+    if: false
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     strategy:
