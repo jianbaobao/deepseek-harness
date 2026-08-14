@@ -7,17 +7,24 @@
 // every @deepseek-ai/* package pinned to the fork's own tarballs — registry
 // versions may be newer and must not leak in.
 //
-// Usage: node scripts/package-portable.mjs [repo-root] [output-dir]
+// Usage: node scripts/package-portable.mjs [repo-root] [output-dir] [--node-dir <dir>]
 //   repo-root  default: repository root (derived from this file's location)
 //   output-dir default: <repo-root>/dist/portable
+//   --node-dir <dir>  optional: a prepared Node.js runtime directory that is
+//                     copied to <output-dir>/node/ so the launchers run against
+//                     the bundled runtime instead of requiring a system Node.
+//                     Windows layout: node.exe at the runtime root; Unix
+//                     layout: bin/node (matching official node distributions).
 // Requires: dist/tgz/*.tgz (see scripts/pack-all-tgz.sh), npm >= 9.
 import { execSync } from 'node:child_process'
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const repoRoot = resolve(process.argv[2] ?? resolve(import.meta.dirname, '..'))
 const tgzDir = join(repoRoot, 'dist', 'tgz')
 const outDir = resolve(process.argv[3] ?? join(repoRoot, 'dist', 'portable'))
+const nodeFlagIndex = process.argv.indexOf('--node-dir')
+const nodeDir = nodeFlagIndex >= 0 ? process.argv[nodeFlagIndex + 1] : undefined
 
 if (!existsSync(tgzDir) || readdirSync(tgzDir).length === 0) {
   console.error(`no tarballs in ${tgzDir}; run scripts/pack-all-tgz.sh first`)
@@ -92,11 +99,37 @@ const binSrc = join(nm, ...entry.split('/'), 'lib', 'bin.js')
 if (!existsSync(binSrc)) throw new Error('entry bin missing: ' + binSrc)
 
 const relEntryBin = relative(outDir, binSrc).replace(/\\/g, '/')
-writeFileSync(join(outDir, 'dsh.cmd'), `@echo off\r\nnode "%~dp0${relEntryBin}" %*\r\n`)
-writeFileSync(join(outDir, 'dsh'), `#!/usr/bin/env node\r\nimport(${JSON.stringify(`file://${relEntryBin}`)})\r\n`)
+const bundledNode = nodeDir !== undefined && existsSync(nodeDir)
+
+// Launchers prefer the bundled runtime (node/ in the install directory) and
+// fall back to a system node when no runtime was bundled.
+writeFileSync(join(outDir, 'dsh.cmd'),
+  `@echo off\r\n` +
+  `setlocal\r\n` +
+  `set "DSH_NODE=%~dp0node\\node.exe"\r\n` +
+  `if exist "%DSH_NODE%" (\r\n` +
+  `  "%DSH_NODE%" "%~dp0${relEntryBin}" %*\r\n` +
+  `) else (\r\n` +
+  `  node "%~dp0${relEntryBin}" %*\r\n` +
+  `)\r\n`)
+writeFileSync(join(outDir, 'dsh'),
+  `#!/usr/bin/env sh\n` +
+  `DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n` +
+  `if [ -x "$DIR/node/bin/node" ]; then\n` +
+  `  exec "$DIR/node/bin/node" "$DIR/${relEntryBin}" "$@"\n` +
+  `fi\n` +
+  `exec node "$DIR/${relEntryBin}" "$@"\n`)
+
+if (bundledNode) {
+  cpSync(nodeDir, join(outDir, 'node'), { recursive: true })
+  console.log('bundled Node runtime from ' + nodeDir + ' into ' + join(outDir, 'node'))
+}
+
 writeFileSync(join(outDir, 'README.txt'),
   `DeepSeek Harness portable build (${entry}@${entryVersion})\r\n` +
   `\r\n` +
-  `Run dsh.cmd (Windows) or: node node_modules/@deepseek-ai/dsh/lib/bin.js --help\r\n` +
-  `Requires Node.js >= 22.19. The dsh web/headless profiles auto-initialize on first use.\r\n`)
+  (bundledNode
+    ? `Includes a bundled Node.js runtime — no system Node required.\r\n`
+    : `Requires Node.js >= 22.19 on PATH.\r\n`) +
+  `Run dsh.cmd (Windows) or ./dsh (Unix). The dsh web/headless profiles auto-initialize on first use.\r\n`)
 console.log('portable assembly done at ' + outDir)

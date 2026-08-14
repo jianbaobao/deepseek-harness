@@ -7,7 +7,10 @@
 
 | 产物 | 说明 |
 |---|---|
-| `dsh-windows-x64-<version>.zip` | Windows 便携包：解压后运行 `dsh.cmd`（需要 Node.js >= 22.19） |
+| `DeepSeek-Harness-<version>-setup.exe` | Windows 安装器（Inno Setup，免安装 Node，装到开始菜单/PATH） |
+| `deepseek-harness_<version>_amd64.deb` | Debian/Ubuntu 安装包（`sudo dpkg -i`，捆绑 Node） |
+| `DeepSeek-Harness-<version>-macos.dmg` | macOS 磁盘映像（运行 `安装.command` 链接到 ~/.local/bin，捆绑 Node） |
+| `dsh-windows-x64-<version>.zip` | Windows 便携版：解压后运行 `dsh.cmd`（捆绑 Node） |
 | `dsh-npm-packages-<version>.zip` | 全部 `@deepseek-ai/*` 包的 npm tarball 合集（约 230 个 .tgz），解压后可 `npm i -g` 安装 |
 | `SHA256SUMS` | 所有产物的 SHA-256 校验和 |
 | `latest.json` | 最新版本信息（供更新检查） |

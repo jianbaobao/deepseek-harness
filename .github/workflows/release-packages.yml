@@ -81,8 +81,8 @@ jobs:
           path: dist/tgz/dsh-npm-packages-*.zip
           if-no-files-found: error
 
-  portable-windows:
-    name: Build Windows portable package
+  installer-windows:
+    name: Build Windows installer (exe + portable zip)
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -124,25 +124,181 @@ jobs:
           "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Assemble portable directory
-        run: node scripts/package-portable.mjs . dist/portable
+      - name: Download Node.js runtime (win-x64)
+        shell: bash
+        run: |
+          mkdir -p dist/node-runtime dist/node-extract
+          curl -sL -o dist/node-dist.zip "https://nodejs.org/dist/v24.16.0/node-v24.16.0-win-x64.zip"
+          unzip -q dist/node-dist.zip -d dist/node-extract
+          cp dist/node-extract/node-v24.16.0-win-x64/node.exe dist/node-runtime/
+          ./dist/node-runtime/node.exe --version
 
-      - name: Create Windows zip
+      - name: Assemble portable directory (bundled Node)
+        run: node scripts/package-portable.mjs . dist/windows-bundle --node-dir dist/node-runtime
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\innosetup.exe"
+          Start-Process -FilePath "$env:TEMP\innosetup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
+
+      - name: Build Windows installer (exe)
+        shell: pwsh
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe' /DMyAppVersion=${{ steps.version.outputs.version }} scripts/installer-windows.iss
+          Get-Item "dist/DeepSeek-Harness-${{ steps.version.outputs.version }}-setup.exe" | Select-Object Name, Length
+
+      - name: Create Windows portable zip
         shell: pwsh
         run: |
           $ver = "${{ steps.version.outputs.version }}"
-          Compress-Archive -Path dist/portable/* -DestinationPath "dsh-windows-x64-$ver.zip" -CompressionLevel Optimal
-          Get-Item "dsh-windows-x64-$ver.zip" | Select-Object Name, Length
+          Compress-Archive -Path dist/windows-bundle/* -DestinationPath "dsh-windows-x64-$ver.zip" -CompressionLevel Optimal
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-portable
-          path: dsh-windows-x64-*.zip
+          name: windows-installer
+          path: |
+            dist/DeepSeek-Harness-*.exe
+            dsh-windows-x64-*.zip
+          if-no-files-found: error
+
+  installer-linux:
+    name: Build Linux installer (deb)
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack npm tarballs (dsh + vendor families)
+        run: bash scripts/pack-all-tgz.sh dist/tgz
+
+      - name: Resolve version
+        id: version
+        run: |
+          REF="${{ github.ref }}"
+          TAG="${REF#refs/tags/}"
+          if [[ "$TAG" != "$REF" ]]; then
+            VER="${TAG#dsh-v}"
+            VER="${VER#v}"
+          else
+            VER="$(node -p "require('./apps/cli/package.json').version")"
+            TAG="dsh-v${VER}"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download Node.js runtime (linux-x64)
+        run: |
+          mkdir -p dist/node-runtime dist/node-extract
+          curl -sL -o dist/node-dist.tar.xz "https://nodejs.org/dist/v24.16.0/node-v24.16.0-linux-x64.tar.xz"
+          tar -xf dist/node-dist.tar.xz -C dist/node-extract
+          mkdir -p dist/node-runtime/bin
+          cp dist/node-extract/node-v24.16.0-linux-x64/bin/node dist/node-runtime/bin/
+          dist/node-runtime/bin/node --version
+
+      - name: Assemble portable directory (bundled Node)
+        run: node scripts/package-portable.mjs . dist/linux-bundle --node-dir dist/node-runtime
+
+      - name: Build Debian package
+        run: bash scripts/package-deb.sh ${{ steps.version.outputs.version }} dist/linux-bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: dist/deb/*.deb
+          if-no-files-found: error
+
+  installer-macos:
+    name: Build macOS installer (dmg)
+    runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Pack npm tarballs (dsh + vendor families)
+        run: bash scripts/pack-all-tgz.sh dist/tgz
+
+      - name: Resolve version
+        id: version
+        run: |
+          REF="${{ github.ref }}"
+          TAG="${REF#refs/tags/}"
+          if [[ "$TAG" != "$REF" ]]; then
+            VER="${TAG#dsh-v}"
+            VER="${VER#v}"
+          else
+            VER="$(node -p "require('./apps/cli/package.json').version")"
+            TAG="dsh-v${VER}"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download Node.js runtime (darwin)
+        run: |
+          case "$(uname -m)" in
+            arm64)  NODE_ARCH=arm64 ;;
+            x86_64) NODE_ARCH=x64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          mkdir -p dist/node-runtime dist/node-extract
+          curl -sL -o dist/node-dist.tar.gz "https://nodejs.org/dist/v24.16.0/node-v24.16.0-darwin-$NODE_ARCH.tar.gz"
+          tar -xf dist/node-dist.tar.gz -C dist/node-extract
+          mkdir -p dist/node-runtime/bin
+          cp "dist/node-extract/node-v24.16.0-darwin-$NODE_ARCH/bin/node" dist/node-runtime/bin/
+          dist/node-runtime/bin/node --version
+
+      - name: Assemble portable directory (bundled Node)
+        run: node scripts/package-portable.mjs . dist/macos-bundle --node-dir dist/node-runtime
+
+      - name: Build macOS dmg
+        run: bash scripts/package-dmg.sh ${{ steps.version.outputs.version }} dist/macos-bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: dist/dmg/*.dmg
           if-no-files-found: error
 
   release:
     name: Publish GitHub Release
-    needs: [pack-npm, portable-windows]
+    needs: [pack-npm, installer-windows, installer-linux, installer-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -152,7 +308,7 @@ jobs:
       - name: Compute SHA256SUMS
         working-directory: artifacts
         run: |
-          find . -type f -name '*.zip' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f \( -name '*.zip' -o -name '*.exe' -o -name '*.deb' -o -name '*.dmg' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
       - name: Write latest.json
@@ -162,7 +318,10 @@ jobs:
             "version": "${{ needs.pack-npm.outputs.version }}",
             "tag": "${{ needs.pack-npm.outputs.tag }}",
             "assets": {
-              "windows": "dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip"
+              "windows": "dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip",
+              "windows-installer": "DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-setup.exe",
+              "linux": "deepseek-harness_${{ needs.pack-npm.outputs.version }}_amd64.deb",
+              "macos": "DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-macos.dmg"
             }
           }
           EOF
@@ -177,8 +336,13 @@ jobs:
 
             Automated build of the DeepSeek Harness repository.
 
-            ### Windows portable package
-            - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (requires Node.js >= 22.19).
+            ### Installers (bundled Node.js runtime, no system Node required)
+            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-setup.exe` — Windows installer (Inno Setup, per-user, adds dsh to PATH).
+            - `deepseek-harness_${{ needs.pack-npm.outputs.version }}_amd64.deb` — Debian/Ubuntu package (`sudo dpkg -i`).
+            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-macos.dmg` — macOS disk image (run 安装.command to link dsh into ~/.local/bin).
+
+            ### Windows portable zip (no installer)
+            - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (bundled Node included).
 
             ### npm packages archive
             All `@deepseek-ai/*` packages as npm tarballs, bundled into one archive:
@@ -193,6 +357,9 @@ jobs:
           files: |
             latest.json
             artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.deb
+            artifacts/**/*.dmg
             artifacts/SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: false
