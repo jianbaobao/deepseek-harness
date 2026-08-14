@@ -147,7 +147,15 @@ jobs:
         shell: pwsh
         run: |
           $verInfo = "${{ steps.version.outputs.version }}" -replace '[^0-9.]', ''
-          & 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe' /DMyAppVersion=${{ steps.version.outputs.version }} /DMyAppVersionInfo=$verInfo scripts/installer-windows.iss
+          # Inno Setup 7 ships a native x64 build installed under Program Files
+          # (not Program Files (x86)); locate ISCC.exe wherever it landed.
+          $iscc = @(
+            'C:\Program Files\Inno Setup 7\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
+            "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found after Inno Setup install' }
+          & $iscc /DMyAppVersion=${{ steps.version.outputs.version }} /DMyAppVersionInfo=$verInfo scripts/installer-windows.iss
           Get-Item "dist/DeepSeek-Harness-${{ steps.version.outputs.version }}-setup.exe" | Select-Object Name, Length
 
       - name: Create Windows portable zip

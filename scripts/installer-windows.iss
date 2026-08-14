@@ -6,6 +6,9 @@
 #endif
 #define MyAppName "DeepSeek Harness"
 #define MyAppExeName "dsh.cmd"
+#ifndef MyAppVersionInfo
+  #define MyAppVersionInfo "0.0.0.0"
+#endif
 
 [Setup]
 AppId={{8F1B2C3D-4E5F-4A6B-9C7D-1D2E3F4A5B6C}
@@ -24,9 +27,6 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\node\node.exe
-#ifndef MyAppVersionInfo
-  #define MyAppVersionInfo "0.0.0.0"
-#endif
 VersionInfoVersion={#MyAppVersionInfo}
 
 [Languages]
