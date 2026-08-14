@@ -8,7 +8,7 @@
 | 产物 | 说明 |
 |---|---|
 | `dsh-windows-x64-<version>.zip` | Windows 便携包：解压后运行 `dsh.cmd`（需要 Node.js >= 22.19） |
-| `deepseek-ai-*.tgz`（约 230 个） | 全部 `@deepseek-ai/*` 包的 npm tarball，可 `npm i -g` 安装 |
+| `dsh-npm-packages-<version>.zip` | 全部 `@deepseek-ai/*` 包的 npm tarball 合集（约 230 个 .tgz），解压后可 `npm i -g` 安装 |
 | `SHA256SUMS` | 所有产物的 SHA-256 校验和 |
 | `latest.json` | 最新版本信息（供更新检查） |
 

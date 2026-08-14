@@ -68,10 +68,17 @@ jobs:
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Bundle npm tarballs into one archive
+        run: |
+          cd dist/tgz
+          python3 -m zipfile -c "dsh-npm-packages-${{ steps.version.outputs.version }}.zip" *.tgz
+          cd ../..
+          ls -la dist/tgz/dsh-npm-packages-*.zip
+
       - uses: actions/upload-artifact@v4
         with:
-          name: npm-tarballs
-          path: dist/tgz/*.tgz
+          name: npm-packages
+          path: dist/tgz/dsh-npm-packages-*.zip
           if-no-files-found: error
 
   portable-windows:
@@ -145,7 +152,7 @@ jobs:
       - name: Compute SHA256SUMS
         working-directory: artifacts
         run: |
-          find . -type f \( -name '*.tgz' -o -name '*.zip' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f -name '*.zip' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
           cat SHA256SUMS
 
       - name: Write latest.json
@@ -173,18 +180,18 @@ jobs:
             ### Windows portable package
             - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (requires Node.js >= 22.19).
 
-            ### npm tarballs
-            All `@deepseek-ai/*` packages as npm tarballs — install globally with:
+            ### npm packages archive
+            All `@deepseek-ai/*` packages as npm tarballs, bundled into one archive:
             ```
-            npm i -g dsh-*.tgz
+            dsh-npm-packages-${{ needs.pack-npm.outputs.version }}.zip
             ```
-            or add the tarball of `@deepseek-ai/dsh` to your project dependencies.
+            Unzip it, then install any package globally with `npm i -g <file>.tgz`, or add
+            the tarball of `@deepseek-ai/dsh` to your project dependencies.
 
             ### Verify
             SHA256SUMS lists every artifact's checksum.
           files: |
             latest.json
-            artifacts/**/*.tgz
             artifacts/**/*.zip
             artifacts/SHA256SUMS
           fail_on_unmatched_files: true
