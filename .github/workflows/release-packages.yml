@@ -146,7 +146,8 @@ jobs:
       - name: Build Windows installer (exe)
         shell: pwsh
         run: |
-          & 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe' /DMyAppVersion=${{ steps.version.outputs.version }} scripts/installer-windows.iss
+          $verInfo = "${{ steps.version.outputs.version }}" -replace '[^0-9.]', ''
+          & 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe' /DMyAppVersion=${{ steps.version.outputs.version }} /DMyAppVersionInfo=$verInfo scripts/installer-windows.iss
           Get-Item "dist/DeepSeek-Harness-${{ steps.version.outputs.version }}-setup.exe" | Select-Object Name, Length
 
       - name: Create Windows portable zip

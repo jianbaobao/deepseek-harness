@@ -8,7 +8,7 @@
 #define MyAppExeName "dsh.cmd"
 
 [Setup]
-AppId={{8F1B2C3D-4E5F-4A6B-9C7D-DeepSeekHarness}
+AppId={{8F1B2C3D-4E5F-4A6B-9C7D-1D2E3F4A5B6C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=DeepSeek Harness
@@ -16,7 +16,7 @@ DefaultDirName={autopf}\DeepSeek Harness
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-OutputDir=dist
+OutputDir=..\dist
 OutputBaseFilename=DeepSeek-Harness-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
@@ -24,7 +24,10 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\node\node.exe
-VersionInfoVersion={#MyAppVersion}
+#ifndef MyAppVersionInfo
+  #define MyAppVersionInfo "0.0.0.0"
+#endif
+VersionInfoVersion={#MyAppVersionInfo}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -34,7 +37,7 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "dist\windows-bundle\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+Source: "..\dist\windows-bundle\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\DSH Command Prompt"; Filename: "{cmd}"; Parameters: "/k ""{app}\{#MyAppExeName}"""
