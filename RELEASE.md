@@ -48,3 +48,47 @@ node scripts/package-portable.mjs . dist/portable   # 组装便携目录
 2. 安装 [Node.js](https://nodejs.org) >= 22.19；
 3. 在解压目录运行 `dsh.cmd`（或 `node node_modules/@deepseek-ai/dsh/lib/bin.js`）；
 4. `dsh --profile web` 启动 web 界面，`dsh --profile headless "任务"` 无头执行。
+
+## Web 界面使用指南
+
+`dsh` 无参数启动即打开 Web 对话界面（默认 http://127.0.0.1:3080）。
+
+### 界面功能
+
+| 功能 | 入口 | 说明 |
+|---|---|---|
+| 项目/工作区 | 侧栏「工作区」 | 浏览与切换目录、文件树，会话绑定到指定目录 |
+| 新会话 | 侧栏「新会话」 | 开始新对话 |
+| 设置 | 设置面板 | 模型/API 配置、界面偏好、插件清单 |
+| 模型选择 | 对话输入区 | 切换当前模型 |
+| Skill/插件 | 设置 → 插件 / 对话工具 | 内置技能自动挂载，可管理插件 |
+| 工具调用 | 对话中自动触发 | bash / 文件 / 任务 / 搜索等 |
+| 目标与规划 | 对话工具栏 | goal / plan 模式 |
+
+### 配置 MCP 服务器
+
+编辑（不存在则创建）`~/.dsh/profiles/web/cordis.patch.yml`（Windows 为 `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`），追加服务器实例：
+
+```yaml
+# stdio 型（本地命令）
+- id: mcp-github
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: github
+    transport: stdio
+    command: npx
+    args: ['-y', '@modelcontextprotocol/server-github']
+    env:
+      GITHUB_TOKEN: !!js process.env.GITHUB_TOKEN
+
+# HTTP 型（远程服务）
+- id: mcp-web
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: web
+    transport: streamable-http
+    url: http://localhost:3000/mcp
+```
+
+保存后 HMR 自动热加载（无需重启），模型即可调用 `mcp__<serverName>__<工具名>` 工具。
+常用配置：`command/args/env/cwd`（stdio）、`url/headers`（HTTP）、`toolCallTimeoutMs`（默认 60000）、`reconnect.*`（断线重连，默认开启）。
