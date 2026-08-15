@@ -114,6 +114,82 @@ function killDsh() {
   dshProcess = null
 }
 
+// ---- Stats panel (balance + session info) ---------------------------------
+
+// Resolve the DeepSeek API key: env first, then the dsh settings.yaml.
+function resolveApiKey() {
+  if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY
+  try {
+    const yaml = fs.readFileSync(path.join(app.getPath('userData'), 'dsh-home', 'settings.yaml'), 'utf8')
+    // settings.yaml may hold `apiKey: sk-...` under an llm/deepseek block; plain regex scan.
+    const m = yaml.match(/(?:apiKey|api_key|key)\s*[:=]\s*["']?(sk-[A-Za-z0-9_-]+)/)
+    if (m) return m[1]
+  } catch { /* no settings file */ }
+  return undefined
+}
+
+// Query the DeepSeek account balance: GET https://api.deepseek.com/user/balance
+async function queryBalance(apiKey) {
+  const res = await fetch('https://api.deepseek.com/user/balance', {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) throw new Error(`balance API HTTP ${res.status}`)
+  const data = await res.json()
+  if (!data.balance_infos || data.balance_infos.length === 0) return { available: false, balance: '—' }
+  const total = data.balance_infos
+    .map(i => Number(i.total_balance || 0))
+    .reduce((a, b) => a + b, 0)
+  return { available: data.is_available !== false, balance: total.toFixed(2) }
+}
+
+function statsPanelHtml(stats) {
+  const row = (label, value) => `<div class="row"><span>${label}</span><b>${value}</b></div>`
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><style>
+    body{margin:0;padding:16px 20px;background:#0f1115;color:#e6e6e6;font:13px/1.9 "Microsoft YaHei",system-ui,sans-serif}
+    h1{font-size:15px;margin:0 0 12px;color:#4d9fff}
+    .row{display:flex;justify-content:space-between;gap:24px;border-bottom:1px solid #1c2027;padding:4px 0}
+    .row span{color:#8a93a3}.row b{font-weight:600}
+    .hint{margin-top:12px;color:#5b6270;font-size:12px}
+    .err{color:#ff6b6b}
+  </style></head><body>
+    <h1>DeepSeek Harness 统计</h1>
+    ${row('版本', stats.version)}
+    ${row('工作区', stats.workspace || '—')}
+    ${row('模型', stats.model || '—')}
+    ${row('余额', stats.balance)}
+    ${stats.balanceError ? `<div class="err">余额查询失败：${stats.balanceError}</div>` : ''}
+    <div class="hint">会话 tokens / 命中率 / 费用 / 速度等实时统计正在接入中（Ctrl+Shift+D 刷新）。</div>
+  </body></html>`
+}
+
+async function openStatsPanel() {
+  const stats = {
+    version: app.getVersion(),
+    workspace: process.env.DSH_DESKTOP_WORKSPACE || '—',
+    model: '—',
+    balance: '—',
+    balanceError: undefined,
+  }
+  const apiKey = resolveApiKey()
+  if (apiKey) {
+    try {
+      const r = await queryBalance(apiKey)
+      stats.balance = `¥${r.balance}`
+    } catch (e) {
+      stats.balanceError = e.message
+    }
+  } else {
+    stats.balanceError = '未配置 DeepSeek API Key（设置 → 模型，或环境变量 DEEPSEEK_API_KEY）'
+  }
+
+  const panel = new BrowserWindow({
+    width: 420, height: 360, title: 'DeepSeek Harness 统计',
+    autoHideMenuBar: true, resizable: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  })
+  panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(statsPanelHtml(stats)))
+}
+
 // Take a full-screen screenshot, save it to Pictures and copy to clipboard.
 // The saved image can be referenced in a conversation (read_image tool) and
 // understood by a vision-capable model (e.g. a pi-ai vision model).
@@ -227,11 +303,16 @@ app.whenReady().then(async () => {
 
   win.loadURL(`http://127.0.0.1:${PORT}`)
 
-  // Ctrl+Shift+S: full-screen screenshot (saved + copied to clipboard)
+  // Ctrl+Shift+S: full-screen screenshot; Ctrl+Shift+D: stats panel
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.control && input.shift && input.key.toLowerCase() === 's') {
+    if (input.type !== 'keyDown' || !input.control || !input.shift) return
+    const key = input.key.toLowerCase()
+    if (key === 's') {
       event.preventDefault()
       void takeScreenshot(win)
+    } else if (key === 'd') {
+      event.preventDefault()
+      void openStatsPanel()
     }
   })
 
