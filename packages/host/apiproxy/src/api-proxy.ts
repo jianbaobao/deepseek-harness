@@ -2799,6 +2799,37 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
     },
 
+    stats: {
+      async describe(request) {
+        // Model/workspace come from the same defaults host.describe reads, so the
+        // status bar matches where an unspecified-cwd session actually lands.
+        const selection = defaults.defaultModelSelection()
+        let tokens = { total: 0 }
+        let rounds = 0
+        const attached = ctx.sessions.list()
+        const session = attached[0]
+        if (session !== undefined) {
+          const meter = ctx.get('tokenMeter')
+          if (meter !== undefined) {
+            try {
+              const m = meter.measure(session)
+              tokens = { total: m.totalTokens }
+              // Round count is approximated from the measured surface nodes.
+              rounds = m.nodes.length
+            } catch {
+              // token-meter is best-effort; never fail the stats read
+            }
+          }
+        }
+        return ok(request, {
+          model: selection.model,
+          workspace: defaults.cwd,
+          rounds,
+          tokens,
+        })
+      },
+    },
+
     workspace: {
       list(request) {
         return Promise.resolve(ok(request, {

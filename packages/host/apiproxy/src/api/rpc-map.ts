@@ -13,6 +13,7 @@ import type { GoalsApi } from './goals.ts'
 import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
+import type { StatsApi } from './stats.ts'
 import type { SubagentsApi } from './subagents.ts'
 import type { RpcResponse } from './rpc.ts'
 
@@ -38,6 +39,7 @@ export interface RpcMethodMap {
   'subagent.history': SubagentsApi['history']
   'subagent.prompt': SubagentsApi['prompt']
   'subagent.interrupt': SubagentsApi['interrupt']
+  'stats.describe': StatsApi['describe']
   'host.describe': HostApi['describe']
   'host.pickDirectory': HostApi['pickDirectory']
   'host.listDirectory': HostApi['listDirectory']

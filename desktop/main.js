@@ -142,23 +142,45 @@ async function queryBalance(apiKey) {
   return { available: data.is_available !== false, balance: total.toFixed(2) }
 }
 
+// Query the dsh web session stats via the /api RPC channel (best-effort).
+async function querySessionStats() {
+  const res = await fetch(`http://127.0.0.1:${PORT}/api/stats.describe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rpcId: 'desktop-stats', payload: {} }),
+  })
+  if (!res.ok) throw new Error(`stats RPC HTTP ${res.status}`)
+  const data = await res.json()
+  const value = data && data.result && data.result.value
+  if (!value) throw new Error('stats RPC: no value in response')
+  return value
+}
+
 function statsPanelHtml(stats) {
-  const row = (label, value) => `<div class="row"><span>${label}</span><b>${value}</b></div>`
+  const item = (label, value) => `<div class="item"><span>${label}</span><b>${value}</b></div>`
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><style>
-    body{margin:0;padding:16px 20px;background:#0f1115;color:#e6e6e6;font:13px/1.9 "Microsoft YaHei",system-ui,sans-serif}
-    h1{font-size:15px;margin:0 0 12px;color:#4d9fff}
-    .row{display:flex;justify-content:space-between;gap:24px;border-bottom:1px solid #1c2027;padding:4px 0}
-    .row span{color:#8a93a3}.row b{font-weight:600}
-    .hint{margin-top:12px;color:#5b6270;font-size:12px}
-    .err{color:#ff6b6b}
+    body{margin:0;padding:14px 18px;background:#0f1115;color:#e6e6e6;font:13px/1.8 "Microsoft YaHei",system-ui,sans-serif}
+    .bar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding-bottom:10px;border-bottom:1px solid #1c2027}
+    .bar .item{display:flex;align-items:center;gap:6px}
+    .bar span{color:#8a93a3}.bar b{font-weight:600;color:#4d9fff}
+    .detail{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px}
+    .detail .item{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #161a20;padding:3px 0}
+    .detail span{color:#8a93a3}
+    .err{color:#ff6b6b;margin-top:8px}
+    .hint{margin-top:10px;color:#5b6270;font-size:12px}
   </style></head><body>
-    <h1>DeepSeek Harness 统计</h1>
-    ${row('版本', stats.version)}
-    ${row('工作区', stats.workspace || '—')}
-    ${row('模型', stats.model || '—')}
-    ${row('余额', stats.balance)}
-    ${stats.balanceError ? `<div class="err">余额查询失败：${stats.balanceError}</div>` : ''}
-    <div class="hint">会话 tokens / 命中率 / 费用 / 速度等实时统计正在接入中（Ctrl+Shift+D 刷新）。</div>
+    <div class="bar">
+      ${item('模型', stats.model || '—')}
+      ${item('工作区', stats.workspace || '—')}
+      ${item('余额', stats.balance)}
+      ${item('版本', stats.version)}
+    </div>
+    <div class="detail">
+      ${item('会话轮数', String(stats.rounds ?? '—'))}
+      ${item('Tokens', stats.tokensTotal != null ? Number(stats.tokensTotal).toLocaleString() : '—')}
+    </div>
+    ${stats.balanceError ? `<div class="err">余额：${stats.balanceError}</div>` : ''}
+    <div class="hint">Ctrl+Shift+D 刷新。命中率/费用/速度实时统计接入中。</div>
   </body></html>`
 }
 
@@ -167,9 +189,23 @@ async function openStatsPanel() {
     version: app.getVersion(),
     workspace: process.env.DSH_DESKTOP_WORKSPACE || '—',
     model: '—',
+    rounds: undefined,
+    tokensTotal: undefined,
     balance: '—',
     balanceError: undefined,
   }
+
+  // session stats via RPC (best-effort; dsh may be mid-boot)
+  try {
+    const s = await querySessionStats()
+    stats.model = s.model || '—'
+    stats.workspace = s.workspace || stats.workspace
+    stats.rounds = s.rounds
+    if (s.tokens) stats.tokensTotal = s.tokens.total
+  } catch (e) {
+    stats.model = stats.model
+  }
+
   const apiKey = resolveApiKey()
   if (apiKey) {
     try {
@@ -183,7 +219,7 @@ async function openStatsPanel() {
   }
 
   const panel = new BrowserWindow({
-    width: 420, height: 360, title: 'DeepSeek Harness 统计',
+    width: 520, height: 300, title: 'DeepSeek Harness 统计',
     autoHideMenuBar: true, resizable: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })

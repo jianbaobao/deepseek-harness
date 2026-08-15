@@ -2990,6 +2990,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     // Satisfies the ApiProxy contract type only: the browser export button
     // hands GET /api/session.export to the native download manager, so this
     // stub is never reached through the fixture's dispatch.
+    stats: {
+      describe: request => ok(request, { rounds: 0, tokens: { total: 0 } }),
+    },
     downloads: {
       sessionLog: () => Promise.resolve(new Response('fixture mode does not serve session export', { status: 404 })),
     },
@@ -3093,6 +3096,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'subagent.history': return this.api.subagents.history(request)
       case 'subagent.prompt': return this.api.subagents.prompt(request, signal)
       case 'subagent.interrupt': return this.api.subagents.interrupt(request)
+      case 'stats.describe': return this.api.stats.describe(request)
       case 'host.describe': return this.api.host.describe(request)
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
