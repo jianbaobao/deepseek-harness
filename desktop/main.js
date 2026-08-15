@@ -178,6 +178,8 @@ function statsPanelHtml(stats) {
     <div class="detail">
       ${item('会话轮数', String(stats.rounds ?? '—'))}
       ${item('Tokens', stats.tokensTotal != null ? Number(stats.tokensTotal).toLocaleString() : '—')}
+      ${item('命中率', stats.cacheHitRate != null ? stats.cacheHitRate + '%' : '—')}
+      ${item('费用估算', stats.costEstimateCny != null ? '¥' + stats.costEstimateCny : '—')}
     </div>
     ${stats.balanceError ? `<div class="err">余额：${stats.balanceError}</div>` : ''}
     <div class="hint">Ctrl+Shift+D 刷新。命中率/费用/速度实时统计接入中。</div>
@@ -191,6 +193,8 @@ async function openStatsPanel() {
     model: '—',
     rounds: undefined,
     tokensTotal: undefined,
+    cacheHitRate: undefined,
+    costEstimateCny: undefined,
     balance: '—',
     balanceError: undefined,
   }
@@ -202,6 +206,8 @@ async function openStatsPanel() {
     stats.workspace = s.workspace || stats.workspace
     stats.rounds = s.rounds
     if (s.tokens) stats.tokensTotal = s.tokens.total
+    if (s.cacheHitRate != null) stats.cacheHitRate = s.cacheHitRate
+    if (s.costEstimateCny != null) stats.costEstimateCny = s.costEstimateCny
   } catch (e) {
     stats.model = stats.model
   }

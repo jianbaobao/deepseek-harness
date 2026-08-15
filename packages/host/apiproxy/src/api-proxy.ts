@@ -2804,8 +2804,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // Model/workspace come from the same defaults host.describe reads, so the
         // status bar matches where an unspecified-cwd session actually lands.
         const selection = defaults.defaultModelSelection()
-        let tokens = { total: 0 }
+        let tokens: {
+          total: number
+          cacheRead?: number
+          cacheWrite?: number
+          uncachedInput?: number
+          output?: number
+        } = { total: 0 }
         let rounds = 0
+        let cacheHitRate: number | undefined
+        let costEstimateCny: number | undefined
         const attached = ctx.sessions.list()
         const session = attached[0]
         if (session !== undefined) {
@@ -2816,6 +2824,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               tokens = { total: m.totalTokens }
               // Round count is approximated from the measured surface nodes.
               rounds = m.nodes.length
+              // Provider-reported usage carries cache-read/uncached/output buckets
+              // when the last call reported accounting (kind 'usage').
+              if (m.baseline.kind === 'usage') {
+                const u = m.baseline.usage
+                const cacheRead = u.cacheReadTokens ?? 0
+                const cacheWrite = u.cacheWriteTokens ?? 0
+                const uncached = u.inputTokens
+                const output = u.outputTokens
+                tokens = { total: m.totalTokens, cacheRead, cacheWrite, uncachedInput: uncached, output }
+                const hitBase = cacheRead + uncached
+                if (hitBase > 0) cacheHitRate = Math.round((cacheRead / hitBase) * 1000) / 10
+                // DeepSeek list pricing (CNY per 1M tokens): cached-in 0.5, uncached-in 2, out 8.
+                costEstimateCny = Math.round(((cacheRead * 0.5 + uncached * 2 + output * 8) / 1_000_000) * 10000) / 10000
+              }
             } catch {
               // token-meter is best-effort; never fail the stats read
             }
@@ -2826,6 +2848,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           workspace: defaults.cwd,
           rounds,
           tokens,
+          ...(cacheHitRate !== undefined ? { cacheHitRate } : {}),
+          ...(costEstimateCny !== undefined ? { costEstimateCny } : {}),
         })
       },
     },

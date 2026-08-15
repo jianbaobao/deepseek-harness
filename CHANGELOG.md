@@ -36,3 +36,7 @@
 ## 0.1.0-rc.11 (2026-08-15)
 - 新增：会话统计 RPC（stats.describe）——聚合当前会话的模型、工作区、轮数、tokens
 - 升级：桌面版统计面板（Ctrl+Shift+D）——Reasonix 风格条显示模型/工作区/余额/轮数/Tokens
+
+## 0.1.0-rc.12 (2026-08-15)
+- 统计面板新增：**缓存命中率**（provider usage cacheRead 计算）与**费用估算**（DeepSeek 定价 ¥/1M：命中 0.5 / 未命中输入 2 / 输出 8）
+- stats RPC 扩展：cacheRead/cacheWrite/uncachedInput/output 明细 + cacheHitRate + costEstimateCny

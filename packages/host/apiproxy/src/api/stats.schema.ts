@@ -13,7 +13,10 @@ export const statsDescribeValueSchema = z.object({
   tokens: z.object({
     total: z.number().int().nonnegative(),
     cacheRead: z.number().int().nonnegative().optional(),
+    cacheWrite: z.number().int().nonnegative().optional(),
     uncachedInput: z.number().int().nonnegative().optional(),
     output: z.number().int().nonnegative().optional(),
   }),
+  cacheHitRate: z.number().min(0).max(100).optional(),
+  costEstimateCny: z.number().nonnegative().optional(),
 })

@@ -12,6 +12,8 @@ export interface StatsTokens {
   total: number
   /** Provider-reported cache-read (prefix-hit) tokens when the last call reported them. */
   cacheRead?: number
+  /** Provider-reported cache-write tokens. */
+  cacheWrite?: number
   /** Provider-reported uncached input tokens. */
   uncachedInput?: number
   /** Provider-reported output tokens. */
@@ -28,6 +30,10 @@ export interface StatsDescription {
   rounds: number
   /** Token counters. */
   tokens: StatsTokens
+  /** Prefix-cache hit rate as a percentage (0-100), when provider usage was reported. */
+  cacheHitRate?: number
+  /** Estimated session cost in CNY from token usage and DeepSeek list pricing. */
+  costEstimateCny?: number
 }
 
 /** Stats-domain unary methods. */
