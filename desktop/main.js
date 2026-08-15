@@ -7,7 +7,7 @@
 // Smoke test:  DSH_DESKTOP_SMOKE=1 electron .   (loads, prints, exits)
 'use strict'
 
-const { app, BrowserWindow, dialog, shell } = require('electron')
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, shell } = require('electron')
 const { spawn, execFileSync } = require('node:child_process')
 const http = require('node:http')
 const path = require('node:path')
@@ -114,6 +114,59 @@ function killDsh() {
   dshProcess = null
 }
 
+// Take a full-screen screenshot, save it to Pictures and copy to clipboard.
+// The saved image can be referenced in a conversation (read_image tool) and
+// understood by a vision-capable model (e.g. a pi-ai vision model).
+async function takeScreenshot(win) {
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 },
+    })
+    if (sources.length === 0) return
+    const image = sources[0].thumbnail
+    const dir = path.join(app.getPath('pictures'), 'DeepSeek Harness')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, `screenshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`)
+    fs.writeFileSync(file, image.toPNG())
+    clipboard.writeImage(image)
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      message: '截图已保存',
+      detail: `${file}\n\n已复制到剪贴板。在对话中可通过图片/附件引用它，由视觉模型识别内容。`,
+      buttons: ['打开目录', '好的'],
+    }).then(({ response }) => {
+      if (response === 0) shell.openPath(dir)
+    })
+  } catch (e) {
+    console.error('screenshot failed:', e)
+  }
+}
+
+// OTA update check: compare against the GitHub Release latest.json in the
+// background (never blocks startup); prompt when a newer version exists.
+const RELEASES_URL = 'https://github.com/jianbaobao/deepseek-harness/releases/latest'
+const LATEST_JSON_URL = `${RELEASES_URL}/download/latest.json`
+
+async function checkForUpdates(win) {
+  try {
+    const res = await fetch(LATEST_JSON_URL)
+    if (!res.ok) return
+    const latest = await res.json()
+    if (typeof latest.version !== 'string' || latest.version === app.getVersion()) return
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: '发现新版本',
+      message: `发现新版本 ${latest.version}`,
+      detail: `当前版本：${app.getVersion()}\n是否前往下载页？`,
+      buttons: ['去下载', '稍后'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (response === 0) shell.openExternal(RELEASES_URL)
+  } catch { /* offline or transient failure: stay silent */ }
+}
+
 app.whenReady().then(async () => {
   // Open the window immediately with a loading page so the app feels fast;
   // the dsh web server boots in the background and we switch over when ready.
@@ -173,6 +226,17 @@ app.whenReady().then(async () => {
   }
 
   win.loadURL(`http://127.0.0.1:${PORT}`)
+
+  // Ctrl+Shift+S: full-screen screenshot (saved + copied to clipboard)
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && input.key.toLowerCase() === 's') {
+      event.preventDefault()
+      void takeScreenshot(win)
+    }
+  })
+
+  // Background update check (after the window is visible; never blocks boot)
+  setTimeout(() => { void checkForUpdates(win) }, 4000)
 })
 
 app.on('window-all-closed', () => app.quit())
