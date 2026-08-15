@@ -25,6 +25,12 @@ export interface Win32FolderDialog {
    */
   setOptions(options: number): number
   /**
+   * `IFileDialog::SetDefaultFolder` — the directory the dialog opens on.
+   * @param folder - an `IShellItem` created from the default path.
+   * @returns the call's HRESULT.
+   */
+  setDefaultFolder(folder: unknown): number
+  /**
    * `IFileDialog::SetTitle`.
    * @param title - the dialog title text.
    * @returns the call's HRESULT.
@@ -79,6 +85,12 @@ export interface Win32DialogBindings {
    * @returns the calling thread's native id.
    */
   currentThreadId(): number
+  /**
+   * Resolve a filesystem path to an IShellItem for SetDefaultFolder.
+   * @param path - an absolute directory path.
+   * @returns the shell item and its release call.
+   */
+  createShellItemFromPath(path: string): { item: unknown; release(): void }
 }
 
 /**
@@ -106,6 +118,7 @@ export function runFolderDialog(
   bindings: Win32DialogBindings,
   title: string,
   onShowing: (threadId: number) => void,
+  defaultDir?: string,
 ): string | null {
   bindings.setThreadDpiAwareness()
   check(bindings.coInitializeSta(), 'CoInitializeEx')
@@ -115,6 +128,14 @@ export function runFolderDialog(
     const dialog = bindings.createFolderDialog()
     try {
       check(dialog.setOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR), 'SetOptions')
+      if (defaultDir !== undefined) {
+        const folder = bindings.createShellItemFromPath(defaultDir)
+        try {
+          check(dialog.setDefaultFolder(folder.item), 'SetDefaultFolder')
+        } finally {
+          folder.release()
+        }
+      }
       check(dialog.setTitle(title), 'SetTitle')
       onShowing(bindings.currentThreadId())
       const shown = dialog.show()

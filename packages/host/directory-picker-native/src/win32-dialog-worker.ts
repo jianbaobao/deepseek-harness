@@ -13,7 +13,7 @@ import { loadWin32DialogBindings } from './win32-dialog-bindings.ts'
 import { runFolderDialog } from './win32-dialog-logic.ts'
 
 /** The driver-to-child payload: the dialog title (passed via env). */
-export interface Win32DialogWorkerData { title: string }
+export interface Win32DialogWorkerData { title: string; defaultDir?: string }
 
 /** One notice or outcome posted back to the driver. */
 export type Win32DialogWorkerMessage =
@@ -23,6 +23,7 @@ export type Win32DialogWorkerMessage =
 
 const title = process.env.DSH_DIALOG_TITLE ?? ''
 if (title === '') throw new Error('win32-dialog-worker: DSH_DIALOG_TITLE is required')
+const defaultDir = process.env.DSH_DIALOG_DEFAULT_DIR || undefined
 if (process.send === undefined) throw new Error('win32-dialog-worker must run as a child process with an IPC channel')
 // node's internal `send` reads `this.connected`, so bind the receiver.
 const send = process.send.bind(process)
@@ -43,7 +44,7 @@ void (async () => {
     const bindings = await loadWin32DialogBindings()
     const path = runFolderDialog(bindings, title, (threadId) => {
       post({ kind: 'showing', threadId } satisfies Win32DialogWorkerMessage)
-    })
+    }, defaultDir)
     post({ kind: 'done', path } satisfies Win32DialogWorkerMessage)
   } catch (error: unknown) {
     const message = error instanceof Error ? (error.stack ?? error.message) : String(error)

@@ -339,6 +339,10 @@ jobs:
     needs: [pack-npm, installer-windows, installer-linux, installer-macos]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -365,37 +369,46 @@ jobs:
           }
           EOF
 
+      - name: Compose release body (template + changelog)
+        run: |
+          VER="${{ needs.pack-npm.outputs.version }}"
+          {
+            echo "## DeepSeek Harness $VER"
+            echo ""
+            echo "### 本次更新 (from CHANGELOG.md)"
+            # Extract the CHANGELOG section for this version (up to the next ##)
+            awk -v v="## $VER" 'BEGIN{flag=0} /^## /{if(index($0,v)==1 && (length($0)==length(v) || substr($0,length(v)+1,1)==" ")){flag=1; next} else if(flag){exit}} flag{print}' CHANGELOG.md
+            echo ""
+            echo "### Installers (bundled Node.js runtime, no system Node required)"
+            echo "- \`DeepSeek-Harness-$VER-setup.exe\` — Windows installer (Inno Setup, per-user, adds dsh to PATH)."
+            echo "- \`deepseek-harness_${VER}_amd64.deb\` — Debian/Ubuntu package (\`sudo dpkg -i\`)."
+            echo "- \`DeepSeek-Harness-$VER-macos.dmg\` — macOS disk image (run 安装.command to link dsh into ~/.local/bin)."
+            echo ""
+            echo "### Windows Desktop app (Electron window, Reasonix-style)"
+            echo "- \`DeepSeek-Harness-$VER-desktop-setup.exe\` — desktop window app; bundles dsh + Node, opens the GUI in its own window (no browser)."
+            echo ""
+            echo "### Windows portable zip (no installer)"
+            echo "- \`dsh-windows-x64-$VER.zip\` — unzip, then run \`dsh.cmd\` (bundled Node included)."
+            echo ""
+            echo "### npm packages archive"
+            echo "All \`@deepseek-ai/*\` packages as npm tarballs, bundled into one archive:"
+            echo "\`\`\`"
+            echo "dsh-npm-packages-$VER.zip"
+            echo "\`\`\`"
+            echo "Unzip it, then install any package globally with \`npm i -g <file>.tgz\`, or add"
+            echo "the tarball of \`@deepseek-ai/dsh\` to your project dependencies."
+            echo ""
+            echo "### Verify"
+            echo "SHA256SUMS lists every artifact's checksum."
+          } > release-body.md
+          cat release-body.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.pack-npm.outputs.tag }}
           name: DeepSeek Harness ${{ needs.pack-npm.outputs.version }}
-          body: |
-            ## DeepSeek Harness ${{ needs.pack-npm.outputs.version }}
-
-            Automated build of the DeepSeek Harness repository.
-
-            ### Installers (bundled Node.js runtime, no system Node required)
-            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-setup.exe` — Windows installer (Inno Setup, per-user, adds dsh to PATH).
-            - `deepseek-harness_${{ needs.pack-npm.outputs.version }}_amd64.deb` — Debian/Ubuntu package (`sudo dpkg -i`).
-            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-macos.dmg` — macOS disk image (run 安装.command to link dsh into ~/.local/bin).
-
-            ### Windows Desktop app (Electron window, Reasonix-style)
-            - `DeepSeek-Harness-${{ needs.pack-npm.outputs.version }}-desktop-setup.exe` — desktop window app; bundles dsh + Node, opens the GUI in its own window (no browser).
-
-            ### Windows portable zip (no installer)
-            - `dsh-windows-x64-${{ needs.pack-npm.outputs.version }}.zip` — unzip, then run `dsh.cmd` (bundled Node included).
-
-            ### npm packages archive
-            All `@deepseek-ai/*` packages as npm tarballs, bundled into one archive:
-            ```
-            dsh-npm-packages-${{ needs.pack-npm.outputs.version }}.zip
-            ```
-            Unzip it, then install any package globally with `npm i -g <file>.tgz`, or add
-            the tarball of `@deepseek-ai/dsh` to your project dependencies.
-
-            ### Verify
-            SHA256SUMS lists every artifact's checksum.
+          body_path: release-body.md
           files: |
             latest.json
             artifacts/**/*.zip

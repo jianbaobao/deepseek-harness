@@ -19,16 +19,19 @@ interface FakeWorld {
   uninitialize: ReturnType<typeof vi.fn>
   dialog: {
     setOptions: ReturnType<typeof vi.fn>
+    setDefaultFolder: ReturnType<typeof vi.fn>
     setTitle: ReturnType<typeof vi.fn>
     show: ReturnType<typeof vi.fn>
     resultPath: ReturnType<typeof vi.fn>
     release: ReturnType<typeof vi.fn>
   }
+  createShellItem: ReturnType<typeof vi.fn>
 }
 
 function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorld {
   const dialog = {
     setOptions: vi.fn(() => 0),
+    setDefaultFolder: vi.fn(() => 0),
     setTitle: vi.fn(() => 0),
     show: vi.fn(() => 0),
     resultPath: vi.fn(() => ({ hr: 0, path: 'C:\\picked\\目录' })),
@@ -38,14 +41,19 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
   const dpi = vi.fn()
   const createDialog = vi.fn(() => dialog)
   const uninitialize = vi.fn()
+  const createShellItem = vi.fn((_p: string) => ({ item: { kind: 'shell-item' }, release: vi.fn() }))
   const bindings: Win32DialogBindings = {
     setThreadDpiAwareness: dpi,
     coInitializeSta: vi.fn(() => coInit),
     coUninitialize: uninitialize,
     createFolderDialog: createDialog,
     currentThreadId: vi.fn(() => 4242),
+    createShellItemFromPath: createShellItem,
   }
-  return { bindings, dpi, createDialog, uninitialize, dialog: dialog as FakeWorld['dialog'] }
+  return {
+    bindings, dpi, createDialog, uninitialize, createShellItem,
+    dialog: dialog as FakeWorld['dialog'],
+  }
 }
 
 describe('runFolderDialog', () => {
@@ -60,6 +68,32 @@ describe('runFolderDialog', () => {
     expect(dialog.setTitle).toHaveBeenCalledWith('Pick')
     expect(showing).toHaveBeenCalledWith(4242)
     expect(showing.mock.invocationCallOrder[0]).toBeLessThan(dialog.show.mock.invocationCallOrder[0] as number)
+    expect(dialog.release).toHaveBeenCalledOnce()
+  })
+
+  it('sets the default folder from defaultDir before Show and releases the shell item', () => {
+    const { bindings, dialog, createShellItem } = world()
+    const showing = vi.fn()
+    expect(runFolderDialog(bindings, 'Pick', showing, 'C:\\Users\\me')).toBe('C:\\picked\\目录')
+    expect(createShellItem).toHaveBeenCalledWith('C:\\Users\\me')
+    const { item, release } = createShellItem.mock.results[0]!.value as { item: unknown; release: () => void }
+    expect(dialog.setDefaultFolder).toHaveBeenCalledWith(item)
+    expect(release).toHaveBeenCalledOnce()
+    expect(dialog.setDefaultFolder.mock.invocationCallOrder[0]).toBeLessThan(dialog.show.mock.invocationCallOrder[0] as number)
+  })
+
+  it('skips SetDefaultFolder when defaultDir is omitted', () => {
+    const { bindings, dialog, createShellItem } = world()
+    runFolderDialog(bindings, 'Pick', vi.fn())
+    expect(createShellItem).not.toHaveBeenCalled()
+    expect(dialog.setDefaultFolder).not.toHaveBeenCalled()
+  })
+
+  it('releases the shell item and dialog when SetDefaultFolder fails', () => {
+    const { bindings, dialog, createShellItem } = world({ setDefaultFolder: vi.fn(() => E_FAIL) })
+    expect(() => runFolderDialog(bindings, 'Pick', vi.fn(), 'C:\\Users\\me')).toThrow('SetDefaultFolder failed: HRESULT 0x80004005')
+    const { release } = createShellItem.mock.results[0]!.value as { release: () => void }
+    expect(release).toHaveBeenCalledOnce()
     expect(dialog.release).toHaveBeenCalledOnce()
   })
 

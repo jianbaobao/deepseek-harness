@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.0-rc.7",
+  "version": "0.1.0-rc.8",
   "private": true,
   "description": "DeepSeek Harness Desktop - Reasonix-style GUI over the dsh web profile",
   "main": "main.js",

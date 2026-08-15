@@ -33,6 +33,7 @@ interface ComWorld {
   path: string
   titles: string[]
   options: number[]
+  defaultFolders: unknown[]
   dpiContexts: unknown[]
   freed: unknown[]
   released: string[]
@@ -47,7 +48,7 @@ function comWorld(overrides: Partial<ComWorld> = {}): ComWorld {
     coInitHr: 0, coCreateHr: 0, showHr: 0, getResultHr: 0, getDisplayNameHr: 0,
     hasThreadDpi: true, supportedDpiContexts: [-4], enumThrows: false,
     path: 'C:\\选中\\directory',
-    titles: [], options: [], dpiContexts: [], freed: [], released: [], posted: [],
+    titles: [], options: [], defaultFolders: [], dpiContexts: [], freed: [], released: [], posted: [],
     registered: 0, unregistered: 0, uninitialized: 0,
     ...overrides,
   }
@@ -66,6 +67,7 @@ function installFakeKoffi(world: ComWorld): void {
     if (self.kind === 'dialog') {
       switch (slot) {
         case 9: world.options.push(args[0] as number); return 0
+        case 11: world.defaultFolders.push(args[0]); return 0
         case 17: world.titles.push(args[0] as string); return 0
         case 3: return world.showHr
         case 20: {
@@ -106,6 +108,13 @@ function installFakeKoffi(world: ComWorld): void {
             }
             case 'CoTaskMemFree': return (ptr: unknown) => { world.freed.push(ptr) }
             case 'GetCurrentThreadId': return () => 31337
+            case 'SHCreateItemFromParsingName': return (...args: unknown[]) => {
+              if ((args[3] as Buffer).length !== FAKE_POINTER_SIZE) {
+                throw new Error('SHCreateItemFromParsingName out buffer must be 4 bytes')
+              }
+              outBuffers.set(args[3], itemPtr)
+              return 0
+            }
             case 'SetThreadDpiAwarenessContext': {
               if (!world.hasThreadDpi) throw new Error(`${dll}: SetThreadDpiAwarenessContext not found`)
               return (context: unknown) => {
@@ -178,6 +187,21 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     expect(world.freed).toHaveLength(1)
     expect(world.released).toEqual(['item', 'dialog'])
     expect(world.uninitialized).toBe(1)
+  })
+
+  it('sets the default folder through SHCreateItemFromParsingName + slot 11', async () => {
+    const world = comWorld()
+    installFakeKoffi(world)
+    const { loadWin32DialogBindings } = await loadBindingsModule()
+    const bindings = await loadWin32DialogBindings()
+    const folder = bindings.createShellItemFromPath('C:\\Users\\me')
+    const dialog = bindings.createFolderDialog()
+    dialog.setDefaultFolder(folder.item)
+    folder.release()
+    dialog.release()
+    expect(world.defaultFolders).toHaveLength(1)
+    expect(world.released).toContain('item')
+    expect(world.released).toContain('dialog')
   })
 
   it('maps dismissal and the S_FALSE CoInitializeEx', async () => {
