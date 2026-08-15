@@ -48,7 +48,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run build 2>&1 | tee build-errors.txt; exit ${PIPESTATUS[0]}
+      - name: Upload build errors (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-errors
+          path: build-errors.txt
 
       - name: Pack npm tarballs (dsh + vendor families)
         run: bash scripts/pack-all-tgz.sh dist/tgz
@@ -104,7 +110,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run build 2>&1 | tee build-errors.txt; exit ${PIPESTATUS[0]}
+      - name: Upload build errors (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-errors
+          path: build-errors.txt
 
       - name: Pack npm tarballs (dsh + vendor families)
         run: bash scripts/pack-all-tgz.sh dist/tgz
@@ -224,7 +236,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run build 2>&1 | tee build-errors.txt; exit ${PIPESTATUS[0]}
+      - name: Upload build errors (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-errors
+          path: build-errors.txt
 
       - name: Pack npm tarballs (dsh + vendor families)
         run: bash scripts/pack-all-tgz.sh dist/tgz
@@ -288,7 +306,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run build 2>&1 | tee build-errors.txt; exit ${PIPESTATUS[0]}
+      - name: Upload build errors (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-errors
+          path: build-errors.txt
 
       - name: Pack npm tarballs (dsh + vendor families)
         run: bash scripts/pack-all-tgz.sh dist/tgz
