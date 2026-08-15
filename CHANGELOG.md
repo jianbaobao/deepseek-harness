@@ -40,3 +40,6 @@
 ## 0.1.0-rc.12 (2026-08-15)
 - 统计面板新增：**缓存命中率**（provider usage cacheRead 计算）与**费用估算**（DeepSeek 定价 ¥/1M：命中 0.5 / 未命中输入 2 / 输出 8）
 - stats RPC 扩展：cacheRead/cacheWrite/uncachedInput/output 明细 + cacheHitRate + costEstimateCny
+
+## 0.1.0-rc.13 (2026-08-15)
+- 统计面板新增：**实时生成速度（t/s）**——面板每 2 秒轮询 stats RPC，按 Tokens 增量/时间实时估算

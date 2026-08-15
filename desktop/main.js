@@ -180,9 +180,34 @@ function statsPanelHtml(stats) {
       ${item('Tokens', stats.tokensTotal != null ? Number(stats.tokensTotal).toLocaleString() : '—')}
       ${item('命中率', stats.cacheHitRate != null ? stats.cacheHitRate + '%' : '—')}
       ${item('费用估算', stats.costEstimateCny != null ? '¥' + stats.costEstimateCny : '—')}
+      ${item('生成速度', '<span id="speed">—</span>')}
     </div>
     ${stats.balanceError ? `<div class="err">余额：${stats.balanceError}</div>` : ''}
-    <div class="hint">Ctrl+Shift+D 刷新。命中率/费用/速度实时统计接入中。</div>
+    <div class="hint">Ctrl+Shift+D 刷新。生成速度按 Tokens 增量/时间实时估算。</div>
+    <script>
+      let lastTokens = null, lastTime = null
+      async function pollSpeed() {
+        try {
+          const res = await fetch('http://127.0.0.1:${PORT}/api/stats.describe', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rpcId: 'panel-speed', payload: {} }),
+          })
+          const data = await res.json()
+          const total = data && data.result && data.result.value && data.result.value.tokens
+            ? data.result.value.tokens.total : null
+          const now = Date.now()
+          if (typeof total === 'number' && lastTokens != null && lastTime != null) {
+            const dt = (now - lastTime) / 1000
+            if (dt >= 1) {
+              const rate = Math.round((total - lastTokens) / dt)
+              document.getElementById('speed').textContent = rate >= 0 ? rate + ' t/s' : '—'
+            }
+          }
+          lastTokens = total; lastTime = now
+        } catch { /* dsh may be mid-boot */ }
+      }
+      setInterval(pollSpeed, 2000)
+    </script>
   </body></html>`
 }
 
