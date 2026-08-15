@@ -115,6 +115,32 @@ function killDsh() {
 }
 
 app.whenReady().then(async () => {
+  // Open the window immediately with a loading page so the app feels fast;
+  // the dsh web server boots in the background and we switch over when ready.
+  const win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 960,
+    minHeight: 600,
+    title: 'DeepSeek Harness',
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  win.loadFile(path.join(__dirname, 'loading.html'))
+  win.once('ready-to-show', () => win.show())
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.on('closed', () => {
+    app.isQuitting = true
+    killDsh()
+  })
+
   const dir = bundleDir()
   try {
     if (!bundleReady(dir)) extractBundle(dir)
@@ -146,28 +172,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 960,
-    minHeight: 600,
-    title: 'DeepSeek Harness',
-    autoHideMenuBar: true,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  })
-
   win.loadURL(`http://127.0.0.1:${PORT}`)
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-  win.on('closed', () => {
-    app.isQuitting = true
-    killDsh()
-  })
 })
 
 app.on('window-all-closed', () => app.quit())
