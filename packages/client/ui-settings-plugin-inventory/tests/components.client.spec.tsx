@@ -57,7 +57,7 @@ describe('PluginInventorySettingsTab', () => {
     ]) {
       expect(screen.getByRole('img', { name: value })).toBeTruthy()
     }
-    const active = screen.getByRole('button', { name: 'hmr, Mounted, Enabled' })
+    const active = screen.getByRole('button', { name: '热模块替换, Mounted, Enabled' })
     expect(active.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(active)
     expect(active.getAttribute('aria-expanded')).toBe('true')
@@ -72,7 +72,7 @@ describe('PluginInventorySettingsTab', () => {
       target: { value: 'disabled-entry' },
     })
     expect(view.container.querySelector('[data-loader-entry]')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'directory-picker-native, Disabled' }))
+    fireEvent.click(screen.getByRole('button', { name: '系统目录选择器, Disabled' }))
     expect(screen.getAllByText(en.disabledTag)).toHaveLength(2)
     expect(screen.queryByText(en.cordis)).toBeNull()
     expect(screen.queryByText(en.unobserved)).toBeNull()
@@ -84,11 +84,11 @@ describe('PluginInventorySettingsTab', () => {
 
     fireEvent.change(search, { target: { value: 'disabled-entry' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
-    expect(screen.getByText('directory-picker-native')).toBeTruthy()
+    expect(screen.getByText('系统目录选择器')).toBeTruthy()
 
     fireEvent.change(search, { target: { value: 'cordis-plugin-hmr' } })
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
-    expect(screen.getByText('hmr')).toBeTruthy()
+    expect(screen.getByText('热模块替换')).toBeTruthy()
 
     fireEvent.change(search, { target: { value: 'not-a-plugin' } })
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
