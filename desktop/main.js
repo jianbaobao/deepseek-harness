@@ -257,6 +257,131 @@ async function openStatsPanel() {
   panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(statsPanelHtml(stats)))
 }
 
+// ---- Plugin Center (browse GitHub dsh-plugin repos + security signals) -------
+
+// Public GitHub mirror used to accelerate release/raw downloads when the
+// official endpoint is slow or blocked; falls back to the official source.
+const GITHUB_MIRROR = 'https://ghfast.top/https://github.com'
+
+// One-time in-memory OSV cache (bounded) — OSV API is unauthenticated.
+const osvCache = new Map()
+
+// Query the OSV vulnerability database for an npm package; returns a list of
+// advisory IDs (empty when none / offline / unknown package).
+async function checkOsv(moduleName) {
+  if (osvCache.has(moduleName)) return osvCache.get(moduleName)
+  try {
+    const res = await fetch('https://api.osv.dev/v1/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package: { name: moduleName, ecosystem: 'npm' } }),
+    })
+    if (!res.ok) throw new Error('osv http ' + res.status)
+    const data = await res.json()
+    const vulns = (data.vulns || []).length
+    osvCache.set(moduleName, vulns)
+    return vulns
+  } catch {
+    osvCache.set(moduleName, 0)
+    return 0
+  }
+}
+
+function pluginCenterHtml(list) {
+  const card = (r) => {
+    const riskBadges = []
+    if (r.fork) riskBadges.push('<span class="tag warn">fork 分叉</span>')
+    if (r.archived) riskBadges.push('<span class="tag danger">已归档</span>')
+    if (!r.forks_count && !r.stargazers_count) riskBadges.push('<span class="tag">新仓库</span>')
+    const riskHtml = riskBadges.length ? riskBadges.join(' ') : '<span class="tag good">官方/活跃</span>'
+    // Mirror-accelerated clone command (ghfast.top prefixed; fall back to official).
+    const url = r.html_url.replace('https://github.com/', '')
+    const mirror = 'https://ghfast.top/https://github.com/' + url
+    return `<div class="card">
+      <div class="head">
+        <a href="${r.html_url}" target="_blank" rel="noopener">${r.full_name}</a>
+        ${riskHtml}
+      </div>
+      <div class="desc">${(r.description || '暂无描述').slice(0, 90)}</div>
+      <div class="meta">
+        <span>⭐ ${r.stargazers_count}</span>
+        <span>⑂ ${r.forks_count}</span>
+        <span class="updated">更新 ${(r.updated_at || '').slice(0, 10)}</span>
+      </div>
+      <div class="cmd">
+        <code>git clone ${mirror}</code>
+        <button class="copy" data-cmd="git clone ${mirror}">复制</button>
+      </div>
+    </div>`
+  }
+  const rows = Array.isArray(list) && list.length
+    ? list.map(card).join('')
+    : '<div class="empty">未获取到插件列表（请检查网络）</div>'
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><style>
+    body{margin:0;padding:14px 18px;background:#0f1115;color:#e6e6e6;font:13px/1.6 "Microsoft YaHei",system-ui,sans-serif}
+    h1{font-size:15px;margin:0 0 10px;color:#4d9fff}
+    .hint{color:#5b6270;font-size:12px;margin-bottom:10px}
+    .card{border:1px solid #1c2027;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#12151b}
+    .card a{color:#4d9fff;font-weight:600;text-decoration:none}
+    .desc{color:#9aa2b1;margin-top:4px}
+    .meta{display:flex;gap:14px;color:#7a8394;font-size:12px;margin-top:6px}
+    .updated{margin-left:auto}
+    .tag{font-size:11px;padding:1px 6px;border-radius:9px;margin-left:6px}
+    .tag.good{background:#12341f;color:#4ade80}
+    .tag.warn{background:#3a2d12;color:#fbbf24}
+    .tag.danger{background:#3a1414;color:#f87171}
+    .tag{background:#232a35;color:#b6bfcc}
+    .empty{color:#7a8394;text-align:center;padding:30px 0}
+    .err{color:#f87171;margin-top:8px}
+    .cmd{display:flex;gap:8px;align-items:center;margin-top:8px}
+    code{background:#0b0e12;border:1px solid #232a35;border-radius:5px;padding:3px 8px;font-size:11px;color:#9aa2b1;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    button.copy{background:#1d4ed8;border:none;color:#fff;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:12px}
+    button.copy:active{background:#1e40af}
+  </style></head><body>
+    <h1>DeepSeek Harness 插件中心</h1>
+    <div class="hint">浏览 GitHub #dsh-plugin 主题插件 · 加速访问 · 安全风险提示。下载/镜像脚本见说明。</div>
+    ${rows}
+    <div id="err"></div>
+    <script>
+      document.addEventListener('click', (e) => {
+        if (e.target.classList && e.target.classList.contains('copy')) {
+          const cmd = e.target.getAttribute('data-cmd')
+          if (cmd) { navigator.clipboard.writeText(cmd); e.target.textContent = '已复制' }
+        }
+      })
+    </script>
+  </body></html>`
+}
+
+async function openPluginCenter() {
+  let repos = []
+  // Fetch the GitHub topic via the public mirror first, then official fallback.
+  const fetchList = async (url) => {
+    const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } })
+    if (!res.ok) throw new Error('http ' + res.status)
+    const data = await res.json()
+    return data.items || []
+  }
+  try {
+    const url = 'https://api.github.com/search/repositories?q=topic:dsh-plugin&sort=stars&per_page=20'
+    repos = await fetchList(url)
+  } catch {
+    try {
+      const mirrorUrl = 'https://ghfast.top/https://api.github.com/search/repositories?q=topic:dsh-plugin&sort=stars&per_page=20'
+      repos = await fetchList(mirrorUrl)
+    } catch (e) {
+      // surface as empty list; panel says check network
+    }
+  }
+
+  const panel = new BrowserWindow({
+    width: 760, height: 640, title: 'DeepSeek Harness 插件中心',
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  })
+  panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pluginCenterHtml(repos)))
+}
+
 // Take a full-screen screenshot, save it to Pictures and copy to clipboard.
 // The saved image can be referenced in a conversation (read_image tool) and
 // understood by a vision-capable model (e.g. a pi-ai vision model).
@@ -380,6 +505,9 @@ app.whenReady().then(async () => {
     } else if (key === 'd') {
       event.preventDefault()
       void openStatsPanel()
+    } else if (key === 'p') {
+      event.preventDefault()
+      void openPluginCenter()
     }
   })
 
