@@ -41,6 +41,7 @@ export interface RpcMethodMap {
   'subagent.interrupt': SubagentsApi['interrupt']
   'stats.describe': StatsApi['describe']
   'host.describe': HostApi['describe']
+  'host.checkUpdate': HostApi['checkUpdate']
   'host.pickDirectory': HostApi['pickDirectory']
   'host.listDirectory': HostApi['listDirectory']
   'host.createDirectory': HostApi['createDirectory']

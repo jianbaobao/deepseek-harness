@@ -72,3 +72,14 @@ export const hostOpenPathRequestSchema = z.object({
 export const hostOpenPathValueSchema = z.object({
   opened: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.openPath'>>>
+
+/** host.checkUpdate request payload (empty; current version is read host-side). */
+export const hostCheckUpdateRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'host.checkUpdate'>>>
+
+/** host.checkUpdate response value: current/latest version and availability. */
+export const hostCheckUpdateValueSchema = z.object({
+  currentVersion: z.string(),
+  latestVersion: z.string().optional(),
+  available: z.boolean(),
+  downloadUrl: z.string().optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.checkUpdate'>>>

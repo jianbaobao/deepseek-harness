@@ -93,4 +93,24 @@ export interface HostApi {
     request: RpcRequest<{ path: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<{ opened: true }>>
+
+  /**
+   * Check for a newer release on the project's GitHub Releases (the OTG/OTA
+   * upgrade probe). The host fetches the `latest.json` version marker so the
+   * browser never needs cross-origin access. Best-effort: a transient
+   * network failure resolves with `available: false` rather than rejecting,
+   * so the upgrade row stays quiet offline.
+   */
+  checkUpdate(
+    request: RpcRequest<{ currentVersion?: string }>,
+  ): Promise<RpcResponse<{
+    /** Current host version (what this deployment runs). */
+    currentVersion: string
+    /** Newest published version, when one is published and newer. */
+    latestVersion?: string
+    /** True when a newer version is available to download. */
+    available: boolean
+    /** Release page the user should visit to download it. */
+    downloadUrl?: string
+  }>>
 }

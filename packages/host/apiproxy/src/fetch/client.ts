@@ -14,7 +14,7 @@ import type { Wire } from '../api/rpc.schema.ts'
 import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../api/rpc.schema.ts'
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
-  hostCreateDirectoryValueSchema, hostDescribeValueSchema,
+  hostCheckUpdateValueSchema, hostCreateDirectoryValueSchema, hostDescribeValueSchema,
   hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
 } from '../api/host.schema.ts'
 import { statsDescribeValueSchema } from '../api/stats.schema.ts'
@@ -108,6 +108,7 @@ export interface IApiClient {
   }
   host: {
     describe(payload: RequestPayload<'host.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.describe'>>>
+    checkUpdate(payload: RequestPayload<'host.checkUpdate'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.checkUpdate'>>>
     pickDirectory(payload: RequestPayload<'host.pickDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.pickDirectory'>>>
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
@@ -191,6 +192,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'subagent.prompt': subagentPromptValueSchema,
   'subagent.interrupt': subagentInterruptValueSchema,
   'stats.describe': statsDescribeValueSchema,
+  'host.checkUpdate': hostCheckUpdateValueSchema,
   'host.describe': hostDescribeValueSchema,
   'host.pickDirectory': hostPickDirectoryValueSchema,
   'host.listDirectory': hostListDirectoryValueSchema,
@@ -438,6 +440,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly host: IApiClient['host'] = {
     describe: (payload, signal) => this.callUnary('host.describe', payload, signal),
+    checkUpdate: (payload, signal) => this.callUnary('host.checkUpdate', payload, signal),
     // A native system dialog is user-paced and may legitimately stay open
     // longer than the normal unary deadline. Caller/connection aborts remain.
     pickDirectory: (payload, signal) => this.callUnary(

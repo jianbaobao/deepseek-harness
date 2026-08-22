@@ -138,6 +138,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
     },
     host: {
+      async checkUpdate(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { currentVersion: 'v', available: false } } }
+      },
       async describe(request) {
         return {
           rpcId: request.rpcId,

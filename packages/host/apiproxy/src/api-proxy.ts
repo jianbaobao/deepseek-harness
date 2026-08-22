@@ -1920,6 +1920,23 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return defaults.openPath !== undefined || canOpenNativePath()
   }
 
+  /** Read the CLI version (apps/cli/package.json) for the upgrade probe, with a cwd fallback. */
+  async function readCliVersion(): Promise<string> {
+    const { readFile } = await import('node:fs/promises')
+    const candidates = [
+      new URL('../../../../apps/cli/package.json', import.meta.url),
+      new URL('../../../apps/cli/package.json', import.meta.url),
+      new URL('file://' + process.cwd() + '/apps/cli/package.json'),
+    ]
+    for (const u of candidates) {
+      try {
+        const pkg = JSON.parse(await readFile(u, 'utf8'))
+        if (typeof pkg.version === 'string') return pkg.version
+      } catch { /* try next */ }
+    }
+    return '0.0.0'
+  }
+
   /** Missing-service report shared by the credentials domain. */
   function credentialsAbsent(): RpcError {
     return { code: 'internal', message: 'credentials service is absent: this deployment does not mount a credential provider (e.g. @deepseek-ai/dsh-credentials-local) in its composition', details: {} }
@@ -2991,6 +3008,38 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           attachedSessions: ctx.agents.list().length,
           canOpenPath: canOpenPaths(),
         }))
+      },
+
+      async checkUpdate(request) {
+        // Best-effort OTA/upgrade probe: fetch the project's latest.json version
+        // marker so the web/desktop UI can show an "upgrade available" row.
+        // A transient network failure resolves as unavailable instead of rejecting.
+        let currentVersion = '0.0.0'
+        try {
+          const cliPkg = await readCliVersion()
+          currentVersion = cliPkg
+        } catch { /* fall through to placeholder */ }
+        try {
+          const ctrl = new AbortController()
+          const timer = setTimeout(() => ctrl.abort(), 8000)
+          const res = await fetch(
+            'https://github.com/jianbaobao/deepseek-harness/releases/latest/download/latest.json',
+            { signal: ctrl.signal },
+          )
+          clearTimeout(timer)
+          const data = await res.json() as { version?: string }
+          if (typeof data.version !== 'string' || data.version === currentVersion) {
+            return ok(request, { currentVersion, available: false })
+          }
+          return ok(request, {
+            currentVersion,
+            latestVersion: data.version,
+            available: true,
+            downloadUrl: `https://github.com/jianbaobao/deepseek-harness/releases/tag/dsh-v${data.version}`,
+          })
+        } catch {
+          return ok(request, { currentVersion, available: false })
+        }
       },
 
       async pickDirectory(request, signal) {

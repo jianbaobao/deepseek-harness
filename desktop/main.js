@@ -467,23 +467,28 @@ async function takeScreenshot(win) {
 const RELEASES_URL = 'https://github.com/jianbaobao/deepseek-harness/releases/latest'
 const LATEST_JSON_URL = `${RELEASES_URL}/download/latest.json`
 
-async function checkForUpdates(win) {
+async function checkForUpdates(win, manual = false) {
   try {
     const res = await fetch(LATEST_JSON_URL)
-    if (!res.ok) return
+    if (!res.ok) { if (manual) await dialog.showMessageBox(win, { type: 'info', message: '检查更新失败', detail: `HTTP ${res.status}，请检查网络。` }); return }
     const latest = await res.json()
-    if (typeof latest.version !== 'string' || latest.version === app.getVersion()) return
+    const current = app.getVersion()
+    const hasUpdate = typeof latest.version === 'string' && latest.version !== current
+    if (!hasUpdate) {
+      if (manual) await dialog.showMessageBox(win, { type: 'info', title: '已是最新版本', message: '当前已是最新版本', detail: `当前版本：${current}` })
+      return
+    }
     const { response } = await dialog.showMessageBox(win, {
       type: 'info',
       title: '发现新版本',
       message: `发现新版本 ${latest.version}`,
-      detail: `当前版本：${app.getVersion()}\n是否前往下载页？`,
+      detail: `当前版本：${current}\n是否前往下载页？`,
       buttons: ['去下载', '稍后'],
       defaultId: 0,
       cancelId: 1,
     })
     if (response === 0) shell.openExternal(RELEASES_URL)
-  } catch { /* offline or transient failure: stay silent */ }
+  } catch { if (manual) await dialog.showMessageBox(win, { type: 'info', title: '检查更新失败', message: '无法连接 GitHub，请稍后重试。' }) /* background: stay silent */ }
 }
 
 // Build the application menu, including a "工具" menu that exposes the stats
@@ -494,6 +499,8 @@ function buildToolsMenu(win) {
     {
       label: '工具',
       submenu: [
+        { label: '检查更新 (OTA 升级)', click: () => void checkForUpdates(win, true) },
+        { type: 'separator' },
         { label: '统计面板 (会话/余额/命中率/费用/速度)', click: () => void openStatsPanel() },
         { type: 'separator' },
         { label: '插件中心 (浏览/镜像/审计)', click: () => void openPluginCenter() },

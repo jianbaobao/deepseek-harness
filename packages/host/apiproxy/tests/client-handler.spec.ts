@@ -73,6 +73,7 @@ function scriptedApi(overrides: {
       ...overrides.subagents,
     },
     host: {
+      checkUpdate: r => ok(r, { currentVersion: '0-test', available: false }),
       describe: r => ok(r, {
         version: '0-test', cwd: '/t', attachedSessions: 0, canOpenPath: true,
       }),
