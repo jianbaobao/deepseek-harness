@@ -7,7 +7,7 @@
 // Smoke test:  DSH_DESKTOP_SMOKE=1 electron .   (loads, prints, exits)
 'use strict'
 
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, shell } = require('electron')
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, Menu, shell } = require('electron')
 const { spawn, execFileSync } = require('node:child_process')
 const http = require('node:http')
 const path = require('node:path')
@@ -115,6 +115,54 @@ function killDsh() {
 }
 
 // ---- Stats panel (balance + session info) ---------------------------------
+
+// ---- Global tools configuration (settings.yaml "ui-tools" namespace) --------
+// Persisted so mirror-acceleration and security-audit apply session-to-session.
+
+function toolsSettingsPath() {
+  return path.join(app.getPath('userData'), 'dsh-home', 'settings.yaml')
+}
+
+// Read the ui-tools global flags; returns sane defaults when missing/corrupt.
+function readToolsConfig() {
+  const cfg = { mirrorAcceleration: true, securityAudit: true }
+  try {
+    const raw = fs.readFileSync(toolsSettingsPath(), 'utf8')
+    const m = raw.match(/ui-tools:\s*([\s\S]*?)(?:^\w|\z)/m)
+    if (m) {
+      const block = m[1]
+      const mirror = block.match(/mirrorAcceleration:\s*(true|false)/)
+      const audit = block.match(/securityAudit:\s*(true|false)/)
+      if (mirror) cfg.mirrorAcceleration = mirror[1] === 'true'
+      if (audit) cfg.securityAudit = audit[1] === 'true'
+    }
+  } catch { /* no settings file yet */ }
+  return cfg
+}
+
+// Rewrite the ui-tools namespace in settings.yaml (comment-preserving best-effort).
+function writeToolsConfig(next) {
+  try {
+    const file = toolsSettingsPath()
+    let raw = ''
+    try { raw = fs.readFileSync(file, 'utf8') } catch { /* new file */ }
+    // Strip any existing ui-tools block.
+    raw = raw.replace(/ui-tools:[\s\S]*?(?:^\w+|\z)/m, '').replace(/\n{3,}/g, '\n\n')
+    const block = 'ui-tools:\n  mirrorAcceleration: ' + next.mirrorAcceleration + '\n  securityAudit: ' + next.securityAudit + '\n'
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, raw.trimEnd() + (raw.trimEnd() ? '\n\n' : '') + block)
+  } catch (e) {
+    console.error('writeToolsConfig failed:', e)
+  }
+}
+
+// Verbatim mirror URL (mirror-acceleration enabled) or plain GitHub URL.
+function pluginCloneUrl(repo, cfg) {
+  if (cfg.mirrorAcceleration) {
+    return 'https://ghfast.top/https://github.com/' + repo
+  }
+  return 'https://github.com/' + repo
+}
 
 // Resolve the DeepSeek API key: env first, then the dsh settings.yaml.
 function resolveApiKey() {
@@ -287,16 +335,18 @@ async function checkOsv(moduleName) {
   }
 }
 
-function pluginCenterHtml(list) {
+function pluginCenterHtml(list, cfg) {
+  const auditOn = !cfg || cfg.securityAudit !== false
   const card = (r) => {
     const riskBadges = []
+    if (!auditOn) riskBadges.push('<span class="tag">安全审计已关闭</span>')
     if (r.fork) riskBadges.push('<span class="tag warn">fork 分叉</span>')
     if (r.archived) riskBadges.push('<span class="tag danger">已归档</span>')
     if (!r.forks_count && !r.stargazers_count) riskBadges.push('<span class="tag">新仓库</span>')
     const riskHtml = riskBadges.length ? riskBadges.join(' ') : '<span class="tag good">官方/活跃</span>'
-    // Mirror-accelerated clone command (ghfast.top prefixed; fall back to official).
-    const url = r.html_url.replace('https://github.com/', '')
-    const mirror = 'https://ghfast.top/https://github.com/' + url
+    // Mirror-accelerated clone command when the global toggle is on.
+    const repo = r.html_url.replace('https://github.com/', '')
+    const mirror = pluginCloneUrl(repo, { mirrorAcceleration: !cfg ? true : cfg.mirrorAcceleration !== false })
     return `<div class="card">
       <div class="head">
         <a href="${r.html_url}" target="_blank" rel="noopener">${r.full_name}</a>
@@ -354,6 +404,7 @@ function pluginCenterHtml(list) {
 }
 
 async function openPluginCenter() {
+  const toolsCfg = readToolsConfig()
   let repos = []
   // Fetch the GitHub topic via the public mirror first, then official fallback.
   const fetchList = async (url) => {
@@ -379,7 +430,7 @@ async function openPluginCenter() {
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })
-  panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pluginCenterHtml(repos)))
+  panel.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(pluginCenterHtml(repos, toolsCfg)))
 }
 
 // Take a full-screen screenshot, save it to Pictures and copy to clipboard.
@@ -435,6 +486,35 @@ async function checkForUpdates(win) {
   } catch { /* offline or transient failure: stay silent */ }
 }
 
+// Build the application menu, including a "工具" menu that exposes the stats
+// panel, plugin center and the global mirror/audit toggles (persisted).
+function buildToolsMenu(win) {
+  const menu = Menu.buildFromTemplate([
+    { role: 'fileMenu', label: '文件' },
+    {
+      label: '工具',
+      submenu: [
+        { label: '统计面板 (会话/余额/命中率/费用/速度)', click: () => void openStatsPanel() },
+        { type: 'separator' },
+        { label: '插件中心 (浏览/镜像/审计)', click: () => void openPluginCenter() },
+        { type: 'separator' },
+        {
+          label: '镜像加速', type: 'checkbox', checked: readToolsConfig().mirrorAcceleration,
+          click: (item) => { const c = readToolsConfig(); c.mirrorAcceleration = item.checked; writeToolsConfig(c) },
+        },
+        {
+          label: '安全审计 (插件 OSV 漏洞检查)', type: 'checkbox', checked: readToolsConfig().securityAudit,
+          click: (item) => { const c = readToolsConfig(); c.securityAudit = item.checked; writeToolsConfig(c) },
+        },
+      ],
+    },
+    { role: 'editMenu', label: '编辑' },
+    { role: 'viewMenu', label: '视图' },
+    { role: 'windowMenu', label: '窗口' },
+  ])
+  Menu.setApplicationMenu(menu)
+}
+
 app.whenReady().then(async () => {
   // Open the window immediately with a loading page so the app feels fast;
   // the dsh web server boots in the background and we switch over when ready.
@@ -451,6 +531,7 @@ app.whenReady().then(async () => {
       nodeIntegration: false,
     },
   })
+  buildToolsMenu(win)
   win.loadFile(path.join(__dirname, 'loading.html'))
   win.once('ready-to-show', () => win.show())
   win.webContents.setWindowOpenHandler(({ url }) => {
