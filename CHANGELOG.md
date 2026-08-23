@@ -63,3 +63,4 @@
 
 ## 0.1.0-rc.18 (2026-08-23)
 - 新增：**web 设置页「升级」项**——通用设置里新增"升级"行，点"检查更新"显示当前/最新版本，有新版时提供下载链接（走 host.checkUpdate RPC）
+- 修复：ui-update 客户端插件打包（clientBundle 形态 + tsconfig.client 引用），CI 各平台构建通过
