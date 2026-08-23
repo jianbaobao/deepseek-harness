@@ -1,17 +1,9 @@
-import { clientOnly } from '../tsdown.client.ts'
+import { clientBundle } from '../tsdown.client.ts'
 
 /**
- * ui-update is browser-only: the "升级" row is a client plugin; its host entry
- * is an empty registration face. The client bundle emits from the compiled
- * `lib/types/client/index.js`.
+ * ui-update is browser-only in its visible surface, but follows the standard
+ * client-plugin shape: the host pass tsc-emits src/ to lib/types (index.js),
+ * and the client bundle is built from `lib/types/client/index.js` with the
+ * standard loader banner/footer. Its host `apply` is a no-op.
  */
-export default clientOnly([{
-  entry: ['lib/types/client/index.js'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'neutral',
-  target: 'es2024',
-  fixedExtension: false,
-  dts: false,
-  clean: false,
-}])
+export default clientBundle('@deepseek-ai/dsh-client-ui-update', ['lib/types/index.js'])
