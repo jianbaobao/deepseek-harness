@@ -46,3 +46,8 @@ dist/
 desktop/node_modules/
 desktop/resources/dsh-bundle/
 desktop/resources/*.tar.gz
+
+# tsc rewriteRelativeImportExtensions local emit (src/*.js + maps)
+src/*.js
+src/*.js.map
+src/*.d.ts.map
