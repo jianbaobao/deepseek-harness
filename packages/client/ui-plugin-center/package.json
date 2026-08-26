@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-plugin-center",
   "description": "Plugin center in the web UI: browse GitHub #dsh-plugin repos with mirror-accelerated clone links and security/OSV audit signals",
-  "version": "0.1.0-rc.18",
+  "version": "0.1.0-rc.19",
   "publishConfig": {
     "access": "public"
   },
