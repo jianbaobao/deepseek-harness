@@ -42,6 +42,18 @@ function bundleReady(dir) {
   return fs.existsSync(path.join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
 }
 
+// A marker recording the archive fingerprint we last extracted, so an upgrade
+// that ships a changed bundle is re-extracted (overwrite) instead of being
+// skipped just because bin.js already exists.
+function bundleFingerprint() {
+  try {
+    const st = fs.statSync(path.join(resourcesDir(), 'dsh-bundle.tar.gz'))
+    return `${st.size}:${st.mtimeMs}`
+  } catch {
+    return 'missing'
+  }
+}
+
 function extractBundle(dir) {
   const archive = path.join(resourcesDir(), 'dsh-bundle.tar.gz')
   if (!fs.existsSync(archive)) throw new Error(`缺少 dsh 运行时压缩包: ${archive}`)
@@ -51,6 +63,23 @@ function extractBundle(dir) {
   const tar = process.platform === 'win32' ? 'C:\\Windows\\System32\\tar.exe' : 'tar'
   // stdio ignore: GUI apps have no console handles for inherited streams
   execFileSync(tar, ['-xzf', archive, '-C', dir], { stdio: 'ignore' })
+  // Record what we extracted so the next boot can detect a changed bundle.
+  try {
+    fs.writeFileSync(path.join(dir, '.bundle-fingerprint'), bundleFingerprint())
+  } catch { /* best-effort marker */ }
+}
+
+// True only when the extract marker matches the current archive (i.e. this
+// install's code is what is present). A missing/mismatched marker forces a
+// fresh overwrite extraction on this boot.
+function bundleNeedsExtract(dir) {
+  if (!bundleReady(dir)) return true
+  try {
+    const marker = fs.readFileSync(path.join(dir, '.bundle-fingerprint'), 'utf8')
+    return marker !== bundleFingerprint()
+  } catch {
+    return true
+  }
 }
 
 function resolveNode(dir) {
@@ -552,7 +581,9 @@ app.whenReady().then(async () => {
 
   const dir = bundleDir()
   try {
-    if (!bundleReady(dir)) extractBundle(dir)
+    // Overwrite-extract whenever the shipped bundle changed on disk, so an
+    // upgrade is applied rather than skipped because an old bin.js existed.
+    if (bundleNeedsExtract(dir)) extractBundle(dir)
   } catch (e) {
     if (SMOKE) { console.error('EXTRACT FAILED:', e.stack || e.message); app.exit(1); return }
     dialog.showErrorBox('DeepSeek Harness', `无法准备 dsh 运行时: ${e.message}`)
