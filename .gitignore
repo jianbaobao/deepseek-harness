@@ -4,3 +4,5 @@ release/
 *.log
 .DS_Store
 .env
+verify-*.png
+asar-run.log

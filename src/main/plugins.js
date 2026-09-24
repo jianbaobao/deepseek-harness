@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { resolve } = require('./store');
 const { getSettings, setSettings } = require('./settings');
-const { zipRead } = require('../../scripts/zip-utils.cjs');
+const { zipRead } = require('./zip-utils.cjs');
 
 const loaded = new Map(); // pluginId -> { module, tools: Map(toolName -> fn) }
 const ctxRef = {};
