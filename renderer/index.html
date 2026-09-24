@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; script-src 'self'">
+  <title>DeepSeek Harness Desktop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <div class="brand-logo"><svg viewBox="0 0 24 24" fill="none"><rect x="1" y="1" width="22" height="22" rx="5" fill="#4d6bfe"/><path d="M8 5.5v13M16 5.5v13M8 12h8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+        <div class="brand-text">
+          <div class="brand-name">DeepSeek Harness</div>
+          <div class="brand-sub">桌面版</div>
+        </div>
+      </div>
+      <nav id="nav">
+        <button class="nav-item" data-view="projects" title="项目列表"><span class="nav-ico"></span><span class="nav-label">项目</span></button>
+        <button class="nav-item" data-view="chat" title="会话"><span class="nav-ico"></span><span class="nav-label">会话</span></button>
+        <button class="nav-item" data-view="skills" title="技能设置"><span class="nav-ico"></span><span class="nav-label">技能</span></button>
+        <button class="nav-item" data-view="mcp" title="MCP 设置"><span class="nav-ico"></span><span class="nav-label">MCP</span></button>
+        <button class="nav-item" data-view="plugins" title="插件"><span class="nav-ico"></span><span class="nav-label">插件</span></button>
+        <button class="nav-item" data-view="settings" title="设置"><span class="nav-ico"></span><span class="nav-label">设置</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="btn-data-dir" class="ghost" title="打开数据目录">数据目录</button>
+        <button id="btn-about" class="ghost" title="关于">关于</button>
+        <div class="status-line" id="model-status"></div>
+      </div>
+    </aside>
+    <main id="main"><div class="boot-screen">DeepSeek Harness 桌面版加载中…</div></main>
+  </div>
+  <div id="toast-root"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

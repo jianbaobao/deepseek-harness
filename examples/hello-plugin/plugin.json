@@ -1,0 +1,7 @@
+{
+  "name": "示例插件 Hello",
+  "version": "1.0.0",
+  "description": "示例插件：注册 get_time / greet 两个工具。",
+  "author": "jianbaobao",
+  "main": "index.js"
+}

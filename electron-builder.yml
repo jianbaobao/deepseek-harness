@@ -1,0 +1,71 @@
+appId: com.deepseek.harness.desktop
+productName: DeepSeek Harness Desktop
+copyright: "Copyright © 2026 jianbaobao"
+directories:
+  buildResources: build
+  output: dist
+files:
+  - src/**/*
+  - renderer/**/*
+  - resources/**/*
+  - package.json
+asar: true
+compression: normal
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: msi
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeepSeek Harness Desktop
+  uninstallDisplayName: "DeepSeek Harness Desktop（卸载）"
+  language: 2052
+  installerLanguages: [zh_CN, en_US]
+  deleteAppDataOnUninstall: false
+
+msi:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  oneClick: true
+  shortcutName: DeepSeek Harness Desktop
+
+portable:
+  artifactName: ${productName}-Portable-${version}-${arch}.${ext}
+
+mac:
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+  category: Development
+  maintainer: jianbaobao <3146378701@qq.com>
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+publish:
+  provider: github
+  owner: jianbaobao
+  repo: deepseek-harness-desktop

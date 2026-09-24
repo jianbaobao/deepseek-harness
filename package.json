@@ -1,0 +1,24 @@
+{
+  "name": "deepseek-harness-desktop",
+  "productName": "DeepSeek Harness Desktop",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness 桌面版 —— 仿 Reasonix 的中文 AI 编程助手桌面客户端：项目列表、会话、MCP、Skill、插件、设置",
+  "main": "src/main/index.js",
+  "author": "jianbaobao <3146378701@qq.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/jianbaobao/deepseek-harness-desktop",
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.mjs",
+    "skills:zip": "node scripts/build-skills-zip.mjs",
+    "dist:win": "electron-builder --win nsis msi portable",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "pngjs": "7.0.0"
+  }
+}

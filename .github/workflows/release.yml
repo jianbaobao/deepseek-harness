@@ -1,0 +1,90 @@
+# 构建并发布安装包到 GitHub Releases
+# 用法：推送标签 v1.0.0 即自动构建，或在 Actions 页面手动触发
+name: 构建安装包并发布
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win nsis msi portable
+            name: windows
+          - os: macos-latest
+            args: --mac dmg
+            name: macos
+          - os: ubuntu-latest
+            args: --linux AppImage deb
+            name: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 生成图标
+        run: npm run icon
+
+      - name: 打包技能 zip
+        run: npm run skills:zip
+
+      - name: 构建安装包
+        run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: |
+            dist/**
+            release/**
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 打包技能 zip
+        run: npm run skills:zip
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 创建 GitHub Release（exe / msi / dmg / AppImage / deb / 技能包）
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*
+            release/skills-pack.zip
+          generate_release_notes: false
+          body: |
+            ## DeepSeek Harness Desktop v${{ github.ref_name }}
+
+            中文 AI 编程助手桌面客户端（仿 Reasonix 布局）。
+
+            ### 安装包
+            - **Windows**：.exe（NSIS 安装程序）/ .msi / .exe Portable 免安装版
+            - **macOS**：.dmg（Apple Silicon / Intel）
+            - **Linux**：.AppImage / .deb
+            - **skills-pack.zip**：内置示例技能包（可在应用内「技能 → 导入技能包」安装）
+
+            ### 更新内容
+            见仓库 CHANGELOG / 提交记录。
