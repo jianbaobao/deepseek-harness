@@ -1,4 +1,4 @@
-# 一次性工具：把已构建产物发布到 GitHub Release（在 GitHub 高速网络上完成，绕开本机下载瓶颈）
+# 一次性工具：把已构建产物发布到 GitHub Release（在 GitHub 高速网络上完成）
 name: 发布已有构建产物
 on:
   workflow_dispatch:
@@ -27,11 +27,8 @@ jobs:
       - name: 打包技能 zip
         run: npm run skills:zip
 
-      - name: 下载指定运行的构建产物
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          run-id: ${{ inputs.run_id }}
+      - name: 下载构建产物
+        run: gh run download "${{ inputs.run_id }}" --repo jianbaobao/deepseek-harness -D artifacts
 
       - name: 创建/更新 Release 并上传安装包
         env:
@@ -39,14 +36,13 @@ jobs:
         run: |
           set -e
           REPO="jianbaobao/deepseek-harness"
-          # 创建 release（若不存在）
-          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$REPO" --title "DeepSeek Harness Desktop $TAG" --notes "$(cat RELEASE_NOTES.md)" || true
-          fi
-          # 上传安装包（--clobber 覆盖同名，|| true 容忍已存在）
+          # 先删除同名 release（含幽灵 draft），保证全新创建
+          gh release delete "$TAG" --repo "$REPO" --yes || true
+          gh release create "$TAG" --repo "$REPO" --title "DeepSeek Harness Desktop $TAG" --notes "$(cat RELEASE_NOTES.md)"
+          # 上传所有安装包与技能包
           find artifacts -type f \( -iname '*.exe' -o -iname '*.msi' -o -iname '*.dmg' -o -iname '*.AppImage' -o -iname '*.deb' -o -iname '*.zip' \) | while read -r f; do
             echo "上传: $(basename "$f")"
-            gh release upload "$TAG" "$f" --repo "$REPO" --clobber || echo "跳过(可能已存在): $(basename "$f")"
+            gh release upload "$TAG" "$f" --repo "$REPO" --clobber || echo "跳过: $(basename "$f")"
           done
           gh release upload "$TAG" release/skills-pack.zip --repo "$REPO" --clobber || echo "跳过 skills-pack.zip"
           gh release view "$TAG" --repo "$REPO"
