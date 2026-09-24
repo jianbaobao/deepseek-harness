@@ -6,3 +6,4 @@ release/
 .env
 verify-*.png
 asar-run.log
+release-staging/
